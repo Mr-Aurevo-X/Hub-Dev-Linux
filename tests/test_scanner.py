@@ -46,6 +46,33 @@ def test_scan_skips_test_fixtures(tmp_path) -> None:
     assert scanner.scan_root(tmp_path) == []
 
 
+def test_should_skip_docker_netns() -> None:
+    assert scanner.should_skip_path("/run/host/root/run/docker/netns/9e97edfa1727")
+    assert scanner.should_skip_path("/run/host")
+    assert scanner.should_skip_path("/run/docker/netns/abc")
+    assert scanner.should_skip_path(Path("/var/lib/docker/overlay2")) is True
+
+
+def test_scan_disk_skips_forbidden_root_and_keeps_ok(tmp_path, monkeypatch) -> None:
+    _write_pkg(tmp_path / "ok", {"dev": "vite --port 3001"})
+    (tmp_path / "ok" / "vite.config.ts").write_text("export default {}\n", encoding="utf-8")
+    forbidden = Path("/run/host/root/run/docker/netns/9e97edfa1727")
+    monkeypatch.setattr(hostcmd, "which", lambda cmd: f"/usr/bin/{cmd}" if cmd in {"pnpm", "npm"} else None)
+    hits = scanner.scan_disk(roots=[forbidden, tmp_path], require_launchable=True)
+    assert {item.name for item in hits} == {"ok"}
+
+
+def test_is_dir_swallows_permission_error(tmp_path, monkeypatch) -> None:
+    blocked = tmp_path / "blocked"
+
+    def boom(self: Path) -> bool:
+        raise PermissionError(13, "Permission non accordée", str(self))
+
+    monkeypatch.setattr(Path, "is_dir", boom)
+    assert scanner._is_dir(blocked) is False
+    assert scanner.scan_root(blocked) == []
+
+
 def test_scan_skips_node_modules(tmp_path) -> None:
     nested = tmp_path / "node_modules" / "vite"
     _write_pkg(nested, {"dev": "echo"})

@@ -30,6 +30,11 @@
   </provides>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="1.2.1" date="2026-08-23">
+      <description>
+        <p>Scan : ignore les namespaces Docker (EACCES /run/docker/netns) et continue.</p>
+      </description>
+    </release>
     <release version="1.2.0" date="2026-08-23">
       <description>
         <p>Prod : Flatpak lance npm/pnpm/docker sur l’hôte, icône, scan sans dossier, Clear scan.</p>

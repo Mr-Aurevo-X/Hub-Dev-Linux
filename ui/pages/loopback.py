@@ -549,6 +549,9 @@ class LoopbackPage(Gtk.Box):
         def work() -> None:
             try:
                 added = registry.Registry.load().scan_disk(should_stop=self._disk_cancel.is_set)
+            except PermissionError:
+                GLib.idle_add(self._on_disk_scan_done, 0, None)
+                return
             except (OSError, RuntimeError, ValueError) as exc:
                 GLib.idle_add(self._on_disk_scan_done, 0, str(exc))
                 return

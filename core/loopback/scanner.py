@@ -40,6 +40,7 @@ SKIP_DIRS = {
     ".local",
     "timeshift",
     "lost+found",
+    "netns",
 }
 DEV_SCRIPT_PRIORITY = (
     "dev:local",
@@ -100,8 +101,19 @@ _VIRTUAL_FS = {
     "efivarfs",
     "fusectl",
     "bpf",
+    "nsfs",
+    "rpc_pipefs",
+    "mqueue",
+    "hugetlbfs",
+    "configfs",
 }
-_SKIP_MOUNT = {"/", "/boot", "/boot/efi", "/boot/efi2"}
+_SKIP_MOUNT = {"/", "/boot", "/boot/efi", "/boot/efi2", "/run/host", "/run/host/root"}
+_SKIP_PATH_TOKENS = (
+    "/run/host",
+    "/docker/netns",
+    "/run/docker/",
+    "/var/lib/docker/",
+)
 _DISK_MAX_DEPTH = 12
 StopCheck = Callable[[], bool]
 
@@ -115,11 +127,28 @@ class ProposedApp:
     preferred_port: int | None = None
 
 
+def _is_dir(path: Path) -> bool:
+    try:
+        return path.is_dir()
+    except OSError:
+        return False
+
+
+def should_skip_path(path: str | Path) -> bool:
+    raw = str(path).replace("\\", "/")
+    if any(token in raw for token in _SKIP_PATH_TOKENS):
+        return True
+    return Path(path).name in SKIP_DIRS
+
+
 def normalize_root(path: str | Path) -> Path:
-    resolved = Path(path).expanduser().resolve()
-    if not resolved.is_dir():
+    try:
+        resolved = Path(path).expanduser().resolve()
+    except OSError as exc:
+        raise ValueError(f"not a directory: {path}") from exc
+    if not _is_dir(resolved):
         raise ValueError(f"not a directory: {resolved}")
-    if resolved.name in SKIP_DIRS:
+    if should_skip_path(resolved):
         raise ValueError(f"skipped directory: {resolved.name}")
     return resolved
 
@@ -184,9 +213,12 @@ def scan_root(
         start = normalize_root(root)
     except ValueError:
         start = Path(root)
-        if not start.is_dir():
+        if should_skip_path(start) or not _is_dir(start):
             return []
-    _scan_dir(start, 0, max_depth, proposals, should_stop)
+    try:
+        _scan_dir(start, 0, max_depth, proposals, should_stop)
+    except OSError:
+        return proposals
     return proposals
 
 
@@ -209,7 +241,7 @@ def disk_scan_roots() -> list[Path]:
         if len(parts) < 3:
             continue
         dest, fstype = parts[1], parts[2]
-        if fstype in _VIRTUAL_FS or dest in _SKIP_MOUNT:
+        if fstype in _VIRTUAL_FS or dest in _SKIP_MOUNT or should_skip_path(dest):
             continue
         candidates.append(Path(dest))
     roots: list[Path] = []
@@ -219,7 +251,7 @@ def disk_scan_roots() -> list[Path]:
             resolved = raw.expanduser().resolve()
         except OSError:
             continue
-        if not resolved.is_dir() or resolved.name in SKIP_DIRS:
+        if should_skip_path(resolved) or not _is_dir(resolved):
             continue
         key = str(resolved)
         if key in seen:
@@ -242,7 +274,11 @@ def scan_disk(
     for root in start_roots:
         if should_stop and should_stop():
             break
-        for proposal in scan_root(root, max_depth=max_depth, should_stop=should_stop):
+        try:
+            found = scan_root(root, max_depth=max_depth, should_stop=should_stop)
+        except OSError:
+            continue
+        for proposal in found:
             key = (proposal.cwd, proposal.command)
             if key in seen:
                 continue
@@ -287,7 +323,7 @@ def _scan_dir(
         if should_stop and should_stop():
             return
         try:
-            if child.is_symlink() or not child.is_dir() or child.name in SKIP_DIRS:
+            if child.is_symlink() or not _is_dir(child) or should_skip_path(child):
                 continue
             if child.name == "fixtures" and path.name in {"test", "tests"}:
                 continue
