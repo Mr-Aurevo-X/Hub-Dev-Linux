@@ -174,8 +174,8 @@ class MainWindow(Adw.ApplicationWindow):
             present_update_dialog(
                 self,
                 "",
-                updater.format_update_dialog_commands(info),
                 updater.format_update_dialog_body(info),
+                updater.format_update_dialog_commands(info),
                 new_version=str(info.get("version") or "?"),
             )
         return False
@@ -187,7 +187,7 @@ class MainWindow(Adw.ApplicationWindow):
         present_update_dialog(
             self,
             "",
-            updater.format_update_dialog_commands(info),
             updater.format_update_dialog_body(info),
+            updater.format_update_dialog_commands(info),
             new_version=str(info.get("version") or "?"),
         )

@@ -14,6 +14,7 @@ from gi.repository import Gdk, GLib, Gio, Gtk  # noqa: E402
 
 from core import i18n
 from core.loopback import history, ports, registry, scanner, spawn
+from core.redact import display_detail, display_path
 from ui import compat
 from ui.helpers import show_toast
 
@@ -171,7 +172,7 @@ class LoopbackPage(Gtk.Box):
         if not items:
             self._history_label.set_text("—")
             return
-        lines = [f"{item['ts']}  {item['event']}  {item['detail']}" for item in items]
+        lines = [f"{item['ts']}  {item['event']}  {display_detail(item['detail'])}" for item in items]
         self._history_label.set_text("\n".join(lines))
 
     def _clear(self, listbox: Gtk.ListBox) -> None:
@@ -194,7 +195,7 @@ class LoopbackPage(Gtk.Box):
             header.add_css_class("loopback-root-header")
             folder = Gtk.Image.new_from_icon_name("folder-symbolic")
             folder.set_pixel_size(18)
-            title = Path(root).name if root else i18n.t("loopback_apps")
+            title = Path(display_path(root)).name if root else i18n.t("loopback_apps")
             label = Gtk.Label(label=title, xalign=0, hexpand=True)
             label.add_css_class("heading")
             header.append(folder)
@@ -573,7 +574,9 @@ class LoopbackPage(Gtk.Box):
             return False
         hint = self._scan_hint
         if hint:
-            shown = hint if len(hint) < 72 else f"…{hint[-69:]}"
+            shown = display_path(hint)
+            if len(shown) > 72:
+                shown = f"…{shown[-69:]}"
             self._scan_status.set_text(i18n.t("loopback_scan_disk_progress", path=shown))
         return True
 

@@ -98,7 +98,4 @@ def format_update_dialog_commands(info: dict) -> str:
 
 
 def format_update_dialog_body(info: dict) -> str:
-    return (
-        f"{app_display_name()} — local {local_version()} → {info.get('version', '?')}\n"
-        f"{info.get('html_url', '')}"
-    )
+    return f"{app_display_name()} {local_version()} → {info.get('version', '?')}"

@@ -32,6 +32,10 @@ def test_parse_latest_release_requires_flatpak_asset() -> None:
     assert "flatpak install --user -y https://example.test/org.mraurevox.HubDev.flatpak" == (
         updater.format_update_dialog_commands(info)
     )
+    body = updater.format_update_dialog_body(info)
+    assert "http" not in body
+    assert "Lounge" not in body
+    assert "1.2.0" in body
 
 
 def test_check_for_update_none_without_newer_asset(monkeypatch) -> None:
