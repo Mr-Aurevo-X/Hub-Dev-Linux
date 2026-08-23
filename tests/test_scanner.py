@@ -26,7 +26,7 @@ def test_scan_finds_dev_local_and_nested_game(tmp_path) -> None:
     assert tmp_path.name in names
     assert "battler-x" in names
     root = next(item for item in hits if item.cwd == str(tmp_path))
-    assert root.command == "pnpm"
+    assert root.command in {"pnpm", "npm"}
     assert root.args == ["run", "dev:local"]
 
 
@@ -142,6 +142,39 @@ def test_is_launchable_requires_command_and_port(tmp_path, monkeypatch) -> None:
     assert scanner.is_launchable(app) is True
     no_port = ProposedApp("demo", str(tmp_path), "pnpm", ["run", "dev"], None)
     assert scanner.is_launchable(no_port) is False
+
+
+def test_scan_reads_port_from_dev_local_script(tmp_path) -> None:
+    (tmp_path / "scripts").mkdir()
+    (tmp_path / "scripts" / "dev-local.mjs").write_text(
+        "const port = Number(process.env.PORT || 4180)\n",
+        encoding="utf-8",
+    )
+    _write_pkg(tmp_path, {"dev:local": "node scripts/dev-local.mjs"}, pnpm=True)
+    (tmp_path / "vite.config.ts").write_text("export default {}\n", encoding="utf-8")
+    hits = scanner.scan_root(tmp_path)
+    assert len(hits) == 1
+    assert hits[0].args == ["run", "dev:local"]
+    assert hits[0].preferred_port == 4180
+    assert hits[0].command in {"pnpm", "npm", "yarn", "bun"}
+
+
+def test_scan_skips_workspace_games_when_hub_exists(tmp_path) -> None:
+    (tmp_path / "scripts").mkdir()
+    (tmp_path / "scripts" / "dev-local.mjs").write_text(
+        "const port = Number(process.env.PORT || 4180)\n",
+        encoding="utf-8",
+    )
+    _write_pkg(tmp_path, {"dev:local": "node scripts/dev-local.mjs"}, pnpm=True)
+    (tmp_path / "pnpm-workspace.yaml").write_text("packages:\n  - 'games/*'\n", encoding="utf-8")
+    game = tmp_path / "games" / "battler-x"
+    _write_pkg(game, {"dev": "vite"}, pnpm=True)
+    (game / "vite.config.ts").write_text("export default {}\n", encoding="utf-8")
+    hits = scanner.scan_root(tmp_path)
+    names = {item.name for item in hits}
+    assert tmp_path.name in names
+    assert "battler-x" not in names
+    assert hits[0].preferred_port == 4180
 
 
 def test_scan_disk_only_keeps_launchable(tmp_path, monkeypatch) -> None:

@@ -26,6 +26,11 @@
   </provides>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="1.1.1" date="2026-08-23">
+      <description>
+        <p>Scan : port lu dans le script (4180), pas les jeux workspace ; pas de relance si le port écoute déjà.</p>
+      </description>
+    </release>
     <release version="1.1.0" date="2026-08-23">
       <description>
         <p>Scan disque autonome : détecte les serveurs localhost lançables, lit le port et la commande.</p>

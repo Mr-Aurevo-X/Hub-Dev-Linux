@@ -9,7 +9,7 @@ import subprocess
 import time
 from pathlib import Path
 
-from core.loopback import history
+from core.loopback import history, ports
 from core.loopback.registry import AppEntry, Registry
 
 _running: dict[str, subprocess.Popen[bytes]] = {}
@@ -37,6 +37,9 @@ def start(entry: AppEntry) -> None:
     reg.validate_command(entry.command)
     if is_running(entry.id):
         raise RuntimeError("déjà en cours")
+    if entry.preferred_port and ports.is_loopback_port_open(int(entry.preferred_port)):
+        history.append("already", entry.name or entry.id)
+        return
     cwd = Path(entry.cwd).expanduser()
     if not cwd.is_dir():
         raise FileNotFoundError(str(cwd))

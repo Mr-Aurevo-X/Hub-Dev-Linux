@@ -22,6 +22,30 @@ def test_guess_preferred_port_from_script_text(tmp_path) -> None:
     assert guess_preferred_port(root, scripts={"dev:local": "node scripts/dev.mjs --port 4173"}) == 4173
 
 
+def test_guess_preferred_port_uses_picked_script_not_sibling(tmp_path) -> None:
+    root = tmp_path / "lounge"
+    root.mkdir()
+    scripts = {
+        "dev:local": "node scripts/dev-local.mjs",
+        "preview": "vite preview --port 4173",
+    }
+    (root / "scripts").mkdir()
+    (root / "scripts" / "dev-local.mjs").write_text(
+        "const port = Number(process.env.PORT || 4180)\n",
+        encoding="utf-8",
+    )
+    assert guess_preferred_port(root, scripts=scripts, picked="dev:local") == 4180
+
+
+def test_loopback_port_open(monkeypatch) -> None:
+    from core.loopback.ports import PortRow, is_loopback_port_open
+
+    rows = [PortRow(port=4180, pid=1, process_name="node", addr="127.0.0.1", is_loopback=True)]
+    monkeypatch.setattr("core.loopback.ports.list_loopback_ports", lambda: rows)
+    assert is_loopback_port_open(4180) is True
+    assert is_loopback_port_open(5173) is False
+
+
 def test_guess_preferred_port_from_env_and_vite_literal(tmp_path) -> None:
     env_app = tmp_path / "env-app"
     env_app.mkdir()

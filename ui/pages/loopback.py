@@ -221,8 +221,13 @@ class LoopbackPage(Gtk.Box):
             pass
         self._sync_actions()
 
+    def _app_up(self, app: registry.AppEntry) -> bool:
+        if spawn.is_running(app.id):
+            return True
+        return bool(app.preferred_port and ports.is_loopback_port_open(int(app.preferred_port)))
+
     def _make_tile(self, app: registry.AppEntry) -> Gtk.Widget:
-        running = spawn.is_running(app.id)
+        running = self._app_up(app)
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
         box.add_css_class("loopback-tile")
         if running:
@@ -269,7 +274,7 @@ class LoopbackPage(Gtk.Box):
         app = self._selected_app()
         if app is None:
             return
-        running = spawn.is_running(app.id)
+        running = self._app_up(app)
         port = ports.resolve_open_port(app, is_running=running, pid=spawn.running_pid(app.id))
         if running and port:
             webbrowser.open(f"http://127.0.0.1:{port}")
@@ -288,7 +293,7 @@ class LoopbackPage(Gtk.Box):
     def _sync_actions(self) -> None:
         app = self._selected_app()
         enabled = app is not None
-        running = bool(app and spawn.is_running(app.id))
+        running = bool(app and self._app_up(app))
         self._start_btn.set_sensitive(enabled and not running)
         self._stop_btn.set_sensitive(enabled and running)
         self._remove_btn.set_sensitive(enabled)
@@ -300,6 +305,9 @@ class LoopbackPage(Gtk.Box):
     def _start_selected(self) -> None:
         app = self._selected_app()
         if app is None:
+            return
+        if self._app_up(app):
+            self._open_selected()
             return
         try:
             spawn.start(app)

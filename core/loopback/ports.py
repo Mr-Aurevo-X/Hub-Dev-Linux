@@ -18,6 +18,10 @@ _NODE_COMMANDS = {"npm", "pnpm", "yarn", "bun", "node", "vite"}
 _PORT_FLAG = re.compile(r"(?:--port|-p|--listen)\s*[=\s]+(\d{2,5})", re.I)
 _CONFIG_PORT = re.compile(r"\bport\s*[:=]\s*(\d{2,5})\b")
 _ENV_PORT = re.compile(r"^(?:PORT|VITE_PORT|DEV_PORT|APP_PORT|HTTP_PORT)\s*=\s*(\d{2,5})\s*$", re.M)
+_NODE_SCRIPT = re.compile(r"(?:node|tsx|ts-node)\s+([^\s]+\.(?:mjs|cjs|js|ts))")
+_ENV_OR_PORT = re.compile(r"process\.env\.PORT\s*\|\|\s*(\d{2,5})")
+_LISTEN_PORT = re.compile(r"\.listen\(\s*(\d{2,5})")
+_PORT_ASSIGN = re.compile(r"\bport\s*=\s*(?:Number\([^)]*?\|\|\s*)?(\d{2,5})", re.I)
 _ENV_FILES = (".env", ".env.local", ".env.development")
 _VITE_CONFIGS = ("vite.config.ts", "vite.config.js", "vite.config.mjs")
 _NEXT_CONFIGS = ("next.config.js", "next.config.mjs", "next.config.ts")
@@ -77,11 +81,34 @@ def _port_from_config_literal(root: Path) -> int | None:
     return None
 
 
+def _scoped_scripts(scripts: dict[str, str] | None, picked: str | None) -> dict[str, str] | None:
+    if not scripts:
+        return scripts
+    if picked and picked in scripts:
+        return {picked: scripts[picked]}
+    return scripts
+
+
+def _port_from_launch_file(root: Path, scripts: dict[str, str] | None) -> int | None:
+    blob = " ".join(str(value) for value in (scripts or {}).values())
+    match = _NODE_SCRIPT.search(blob)
+    if match is None:
+        return None
+    text = _read_text(root / match.group(1), 40000)
+    for regex in (_ENV_OR_PORT, _LISTEN_PORT, _PORT_ASSIGN):
+        found = regex.search(text)
+        if found:
+            return _valid_port(found.group(1))
+    return None
+
+
 def _framework_default_port(root: Path, scripts: dict[str, str] | None) -> int | None:
     names = " ".join(str(key) for key in (scripts or {}))
     blob = " ".join(str(value) for value in (scripts or {}).values())
     text = f"{names} {blob}".lower()
-    if any((root / name).is_file() for name in _VITE_CONFIGS) or "vite" in text or "dev:local" in text:
+    if "dev:local" in text:
+        return None
+    if any((root / name).is_file() for name in _VITE_CONFIGS) or "vite" in text:
         return 5173
     if any((root / name).is_file() for name in _NEXT_CONFIGS) or "next" in text:
         return 3000
@@ -98,14 +125,25 @@ def _framework_default_port(root: Path, scripts: dict[str, str] | None) -> int |
     return None
 
 
-def guess_preferred_port(path: str | Path, scripts: dict[str, str] | None = None) -> int | None:
+def guess_preferred_port(
+    path: str | Path,
+    scripts: dict[str, str] | None = None,
+    picked: str | None = None,
+) -> int | None:
     root = Path(path)
+    scoped = _scoped_scripts(scripts, picked)
     return (
-        _port_from_scripts(scripts)
+        _port_from_scripts(scoped)
+        or _port_from_launch_file(root, scoped)
         or _port_from_env(root)
         or _port_from_config_literal(root)
-        or _framework_default_port(root, scripts)
+        or _framework_default_port(root, scoped)
     )
+
+
+def is_loopback_port_open(port: int, rows: list[PortRow] | None = None) -> bool:
+    listed = list(rows) if rows is not None else list_loopback_ports()
+    return any(row.port == int(port) for row in listed)
 
 
 def _pid_cwd(pid: int) -> Path | None:

@@ -244,18 +244,43 @@ class Registry:
         roots = [Path(raw) for raw in self.allowed_roots if Path(raw).is_dir()]
         if not roots:
             return 0
-        proposals: list[scanner.ProposedApp] = []
-        for root in roots:
-            proposals.extend(scanner.scan_root(root))
-        return self._ingest(proposal for proposal in proposals if scanner.is_launchable(proposal))
+        proposals = [item for root in roots for item in scanner.scan_root(root) if scanner.is_launchable(item)]
+        return self._ingest(proposals)
 
     def scan_disk(self, should_stop: scanner.StopCheck | None = None) -> int:
         return self._ingest(scanner.scan_disk(require_launchable=True, should_stop=should_stop))
 
+    def _cwd_key(self, raw: str) -> str:
+        try:
+            return str(Path(raw).expanduser().resolve())
+        except OSError:
+            return raw
+
     def _ingest(self, proposals: Iterable[scanner.ProposedApp]) -> int:
+        wanted = {self._cwd_key(item.cwd): item for item in proposals}
+        kept: list[AppEntry] = []
+        seen: set[str] = set()
+        for app in self.apps:
+            key = self._cwd_key(app.cwd)
+            if scanner.is_workspace_member_of_hub(Path(app.cwd)):
+                continue
+            if key in seen:
+                continue
+            seen.add(key)
+            kept.append(app)
+        self.apps = kept
         added = 0
-        for proposal in proposals:
-            if any(app.cwd == proposal.cwd and app.command == proposal.command for app in self.apps):
+        for key, proposal in wanted.items():
+            existing = next((app for app in self.apps if self._cwd_key(app.cwd) == key), None)
+            if existing is not None:
+                self.update_app(
+                    existing.id,
+                    name=proposal.name,
+                    cwd=proposal.cwd,
+                    command=proposal.command,
+                    args=proposal.args,
+                    preferred_port=proposal.preferred_port,
+                )
                 continue
             try:
                 add_app_from_proposal(proposal, self)
@@ -263,6 +288,7 @@ class Registry:
                 added += 1
             except ValueError:
                 continue
+        self.save()
         return added
 
     def remove_app(self, app_id: str) -> bool:

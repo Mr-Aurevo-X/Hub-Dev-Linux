@@ -42,8 +42,8 @@ SKIP_DIRS = {
     "lost+found",
 }
 DEV_SCRIPT_PRIORITY = (
-    "dev:local:all",
     "dev:local",
+    "dev:local:all",
     "dev",
     "start:dev",
     "serve",
@@ -53,6 +53,8 @@ DEV_SCRIPT_PRIORITY = (
     "dev:server",
     "web",
 )
+_HUB_SCRIPTS = ("dev:local", "dev:local:all")
+_WORKSPACE_MARKERS = ("pnpm-workspace.yaml", "lerna.json", "turbo.json")
 _SERVER_HINTS = (
     "vite",
     "next",
@@ -300,7 +302,7 @@ def _read_head(path: Path, limit: int = 12000) -> str:
         return ""
 
 
-def _package_manager(path: Path, data: dict[object, object]) -> str:
+def _preferred_package_manager(path: Path, data: dict[object, object]) -> str:
     manager = str(data.get("packageManager") or "")
     if manager.startswith("bun") or (path / "bun.lockb").is_file() or (path / "bun.lock").is_file():
         return "bun"
@@ -309,6 +311,18 @@ def _package_manager(path: Path, data: dict[object, object]) -> str:
     if manager.startswith("yarn") or (path / "yarn.lock").is_file():
         return "yarn"
     return "npm"
+
+
+def _package_manager(path: Path, data: dict[object, object]) -> str:
+    preferred = _preferred_package_manager(path, data)
+    order = [preferred]
+    for extra in ("pnpm", "npm", "yarn", "bun"):
+        if extra not in order:
+            order.append(extra)
+    for command in order:
+        if shutil.which(command):
+            return command
+    return preferred
 
 
 def _script_is_server(name: str, body: str) -> bool:
@@ -335,7 +349,40 @@ def _pick_script(scripts: dict[object, object]) -> str | None:
     return None
 
 
+def _package_scripts(path: Path) -> dict[str, str]:
+    pkg = path / "package.json"
+    if not pkg.is_file():
+        return {}
+    try:
+        data = json.loads(pkg.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    if not isinstance(data, dict):
+        return {}
+    scripts = data.get("scripts") or {}
+    if not isinstance(scripts, dict):
+        return {}
+    return {str(name): str(value) for name, value in scripts.items()}
+
+
+def _has_hub_script(path: Path) -> bool:
+    scripts = _package_scripts(path)
+    return any(key in scripts for key in _HUB_SCRIPTS)
+
+
+def is_workspace_member_of_hub(path: Path) -> bool:
+    current = Path(path)
+    for parent in current.parents:
+        if not any((parent / marker).is_file() for marker in _WORKSPACE_MARKERS):
+            continue
+        if _has_hub_script(parent):
+            return True
+    return False
+
+
 def _detect_node(path: Path) -> ProposedApp | None:
+    if is_workspace_member_of_hub(path):
+        return None
     pkg = path / "package.json"
     if not pkg.is_file():
         return None
@@ -357,7 +404,7 @@ def _detect_node(path: Path) -> ProposedApp | None:
         str(path),
         _package_manager(path, data),
         ["run", picked],
-        guess_preferred_port(path, scripts_text),
+        guess_preferred_port(path, scripts_text, picked=picked),
     )
 
 
