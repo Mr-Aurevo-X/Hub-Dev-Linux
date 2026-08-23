@@ -30,6 +30,11 @@
   </provides>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="1.2.6" date="2026-08-23">
+      <description>
+        <p>Release de vérification — test du bandeau de mise à jour.</p>
+      </description>
+    </release>
     <release version="1.2.5" date="2026-08-23">
       <description>
         <p>Arrêter tue le process hôte sur le port. Icône application mise à jour.</p>
