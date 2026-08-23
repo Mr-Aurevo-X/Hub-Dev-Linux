@@ -32,6 +32,48 @@ def running_pid(app_id: str) -> int | None:
     return None if proc is None else proc.pid
 
 
+def _stop_helper(proc: subprocess.Popen[bytes]) -> None:
+    if proc.poll() is not None:
+        return
+    try:
+        if hostcmd.in_flatpak():
+            proc.terminate()
+        else:
+            os.killpg(proc.pid, signal.SIGTERM)
+    except (OSError, ProcessLookupError):
+        try:
+            proc.terminate()
+        except OSError:
+            return
+    try:
+        proc.wait(timeout=0.8)
+    except subprocess.TimeoutExpired:
+        try:
+            if hostcmd.in_flatpak():
+                proc.kill()
+            else:
+                os.killpg(proc.pid, signal.SIGKILL)
+        except (OSError, ProcessLookupError):
+            try:
+                proc.kill()
+            except OSError:
+                return
+
+
+def _kill_port_listeners(port: int) -> None:
+    for force in (False, True):
+        pids = ports.pids_on_port(port)
+        if not pids:
+            return
+        for pid in pids:
+            try:
+                ports.kill_pid(pid, force=force)
+            except OSError:
+                continue
+        if not force:
+            time.sleep(0.15)
+
+
 def start(entry: AppEntry) -> None:
     reg = Registry.load()
     reg.validate_command(entry.command)
@@ -67,13 +109,13 @@ def start(entry: AppEntry) -> None:
 
 
 def stop(app_id: str) -> None:
+    entry = next((app for app in Registry.load().apps if app.id == app_id), None)
     proc = _running.pop(app_id, None)
-    if proc is None:
+    if proc is not None:
+        _stop_helper(proc)
+    port = entry.preferred_port if entry is not None else None
+    if port:
+        _kill_port_listeners(int(port))
+    elif proc is None:
         raise RuntimeError("pas en cours")
-    if proc.poll() is None:
-        os.killpg(proc.pid, signal.SIGTERM)
-        try:
-            proc.wait(timeout=5)
-        except subprocess.TimeoutExpired:
-            os.killpg(proc.pid, signal.SIGKILL)
-    history.append("stop", app_id)
+    history.append("stop", (entry.name if entry is not None else None) or app_id)

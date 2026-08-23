@@ -226,8 +226,17 @@ def list_loopback_ports() -> list[PortRow]:
     return rows
 
 
-def kill_pid(pid: int) -> None:
+def pids_on_port(port: int, rows: list[PortRow] | None = None) -> list[int]:
+    listed = list(rows) if rows is not None else list_loopback_ports()
+    return [row.pid for row in listed if row.port == int(port)]
+
+
+def kill_pid(pid: int, *, force: bool = False) -> None:
+    sig = signal.SIGKILL if force else signal.SIGTERM
     if hostcmd.in_flatpak():
-        hostcmd.run(["kill", "-TERM", str(pid)], check=False, timeout=5)
+        hostcmd.run(["kill", "-KILL" if force else "-TERM", str(int(pid))], check=False, timeout=5)
         return
-    os.kill(pid, signal.SIGTERM)
+    try:
+        os.kill(int(pid), sig)
+    except ProcessLookupError:
+        return
