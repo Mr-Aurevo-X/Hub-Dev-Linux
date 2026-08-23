@@ -182,11 +182,12 @@ class LoopbackPage(Gtk.Box):
         self._clear_box(self._explorer)
         reg = registry.Registry.load()
         groups = scanner.apps_grouped_by_root(reg.allowed_roots, reg.apps)
-        if not reg.allowed_roots and not reg.apps:
+        if not reg.apps:
             empty = Gtk.Label(label=i18n.t("loopback_no_apps"), xalign=0, wrap=True)
             empty.add_css_class("dim-label")
             self._explorer.append(empty)
-            return
+            if not reg.allowed_roots:
+                return
         any_tile = False
         for root, apps in groups:
             header = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
@@ -205,7 +206,7 @@ class LoopbackPage(Gtk.Box):
                 header.append(remove)
             self._explorer.append(header)
             if not apps:
-                hint = Gtk.Label(label=i18n.t("loopback_no_apps"), xalign=0, wrap=True)
+                hint = Gtk.Label(label=i18n.t("loopback_root_empty"), xalign=0, wrap=True)
                 hint.add_css_class("dim-label")
                 self._explorer.append(hint)
                 continue
@@ -557,9 +558,6 @@ class LoopbackPage(Gtk.Box):
                     should_stop=self._disk_cancel.is_set,
                     on_progress=on_progress,
                 )
-            except PermissionError:
-                GLib.idle_add(self._on_disk_scan_done, 0, None)
-                return
             except (OSError, RuntimeError, ValueError) as exc:
                 GLib.idle_add(self._on_disk_scan_done, 0, str(exc))
                 return

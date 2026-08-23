@@ -36,11 +36,11 @@ def which(command: str) -> str | None:
             check=False,
         )
     except (OSError, subprocess.SubprocessError):
-        found = None
-    else:
-        line = (out.stdout or "").strip().splitlines()
-        found = line[0] if out.returncode == 0 and line else None
-    _WHICH_HOST[command] = found
+        return None
+    line = (out.stdout or "").strip().splitlines()
+    found = line[0] if out.returncode == 0 and line else None
+    if found:
+        _WHICH_HOST[command] = found
     return found
 
 

@@ -37,6 +37,7 @@ _STRINGS: dict[str, dict[str, str]] = {
         "fr": "Aucun serveur lançable. Scanner fouille tous les disques, sans cibler un dossier.",
         "en": "No launchable servers. Scan walks every disk — no folder targeting required.",
     },
+    "loopback_root_empty": {"fr": "Aucun serveur dans ce dossier.", "en": "No server in this folder."},
     "loopback_bad_root": {
         "fr": "Dossier ignoré (chemin invalide ou dossier système).",
         "en": "Folder ignored (invalid path or system directory).",

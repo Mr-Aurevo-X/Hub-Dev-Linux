@@ -254,14 +254,15 @@ class Registry:
                 continue
             seen.add(key)
             proposals.extend(item for item in scanner.detect_in_dir(cwd) if scanner.is_launchable(item))
-        return self._ingest(proposals, replace_under=roots)
+        self._ingest(proposals, replace_under=roots)
+        return len(self.apps)
 
     def scan_disk(
         self,
         should_stop: scanner.StopCheck | None = None,
         on_progress: scanner.ProgressCb | None = None,
     ) -> int:
-        return self._ingest(
+        self._ingest(
             scanner.scan_disk(
                 require_launchable=True,
                 should_stop=should_stop,
@@ -269,6 +270,7 @@ class Registry:
             ),
             replace_all=True,
         )
+        return len(self.apps)
 
     def clear_scan(self) -> int:
         count = len(self.apps)

@@ -167,6 +167,19 @@ def test_apps_grouped_by_root(tmp_path) -> None:
     assert groups[1][1][0].id == "other"
 
 
+def test_apps_grouped_by_root_prefers_nested_root(tmp_path) -> None:
+    parent = tmp_path / "Documents"
+    lounge = parent / "Dev Game Be Like Vercel"
+    lounge.mkdir(parents=True)
+    from core.loopback.registry import AppEntry
+
+    apps = [AppEntry(id="lounge", name="lounge", cwd=str(lounge), command="npm")]
+    groups = scanner.apps_grouped_by_root([str(parent), str(lounge)], apps)
+    by_root = {root: [item.id for item in items] for root, items in groups}
+    assert by_root[str(lounge.resolve())] == ["lounge"]
+    assert by_root[str(parent.resolve())] == []
+
+
 def test_scan_skips_lint_only_package(tmp_path) -> None:
     _write_pkg(tmp_path, {"lint": "eslint .", "test": "vitest"})
     assert scanner.scan_root(tmp_path) == []
@@ -241,13 +254,25 @@ def test_scan_finds_artisan_and_compose(tmp_path) -> None:
 def test_is_launchable_requires_command_and_port(tmp_path, monkeypatch) -> None:
     from core.loopback.scanner import ProposedApp
 
-    app = ProposedApp("demo", str(tmp_path), "pnpm", ["run", "dev"], 5173)
     monkeypatch.setattr(scanner.hostcmd, "which", lambda cmd: None)
-    assert scanner.is_launchable(app) is False
-    monkeypatch.setattr(scanner.hostcmd, "which", lambda cmd: f"/usr/bin/{cmd}")
-    assert scanner.is_launchable(app) is True
+    known = ProposedApp("demo", str(tmp_path), "pnpm", ["run", "dev"], 5173)
+    assert scanner.is_launchable(known) is True
+    unknown = ProposedApp("demo", str(tmp_path), "not-a-real-bin", ["run", "dev"], 5173)
+    assert scanner.is_launchable(unknown) is False
     no_port = ProposedApp("demo", str(tmp_path), "pnpm", ["run", "dev"], None)
     assert scanner.is_launchable(no_port) is False
+
+
+def test_scan_finds_node_app_when_which_is_empty(tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr(hostcmd, "which", lambda cmd: None)
+    monkeypatch.setattr(scanner.toolchain, "which_pnpm", lambda: None)
+    _write_pkg(tmp_path, {"dev": "vite --port 3001"})
+    (tmp_path / "vite.config.ts").write_text("export default {}\n", encoding="utf-8")
+    hits = scanner.scan_root(tmp_path)
+    assert len(hits) == 1
+    assert hits[0].command == "npm"
+    assert hits[0].preferred_port == 3001
+    assert scanner.is_launchable(hits[0]) is True
 
 
 def test_scan_reads_port_from_dev_local_script(tmp_path) -> None:

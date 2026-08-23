@@ -159,6 +159,26 @@ _DETECT_MARKERS = frozenset(
     }
 )
 _DISK_MAX_DEPTH = 12
+_HOST_COMMANDS = frozenset(
+    {
+        "npm",
+        "npx",
+        "pnpm",
+        "yarn",
+        "bun",
+        "node",
+        "corepack",
+        "python",
+        "python3",
+        "docker",
+        "docker-compose",
+        "php",
+        "ruby",
+        "rails",
+        "bundle",
+        "make",
+    }
+)
 StopCheck = Callable[[], bool]
 ProgressCb = Callable[[str], None]
 
@@ -246,14 +266,17 @@ def apps_grouped_by_root(
     roots: list[str],
     apps: list[Any],
 ) -> list[tuple[str, list[Any]]]:
-    used: set[str] = set()
-    groups: list[tuple[str, list[Any]]] = []
+    resolved_roots: list[str] = []
     for root in roots:
         try:
-            resolved = Path(root).expanduser().resolve()
+            resolved_roots.append(str(Path(root).expanduser().resolve()))
         except OSError:
-            resolved = Path(root)
-        group: list[Any] = []
+            resolved_roots.append(root)
+    used: set[str] = set()
+    grouped: dict[str, list[Any]] = {key: [] for key in resolved_roots}
+    assign_order = sorted(range(len(resolved_roots)), key=lambda index: -len(Path(resolved_roots[index]).parts))
+    for index in assign_order:
+        resolved = Path(resolved_roots[index])
         for app in apps:
             if app.id in used:
                 continue
@@ -262,9 +285,9 @@ def apps_grouped_by_root(
             except OSError:
                 continue
             if cwd == resolved or resolved in cwd.parents:
-                group.append(app)
+                grouped[resolved_roots[index]].append(app)
                 used.add(app.id)
-        groups.append((str(resolved), group))
+    groups = [(key, grouped[key]) for key in resolved_roots]
     leftover = [app for app in apps if app.id not in used]
     if leftover:
         groups.append(("", leftover))
@@ -283,6 +306,8 @@ def is_launchable(proposal: ProposedApp) -> bool:
         return True
     relative = cwd / command
     if relative.is_file() and os.access(relative, os.X_OK):
+        return True
+    if Path(command).name in _HOST_COMMANDS:
         return True
     return hostcmd.which(command) is not None
 
@@ -443,6 +468,8 @@ def _package_manager(path: Path, data: dict[object, object]) -> str:
     for command in order:
         if hostcmd.which(command):
             return command
+    if preferred == "pnpm":
+        return "npm"
     return preferred
 
 
@@ -461,13 +488,8 @@ def _node_launch(path: Path, data: dict[object, object], picked: str, scripts: d
             return found, ["run", picked]
         if hostcmd.which("corepack"):
             return "corepack", ["pnpm", "run", picked]
-        if hostcmd.which("npx"):
-            return "npx", ["--yes", f"pnpm@{_pnpm_version(data)}", "run", picked]
-        return None
-    command = _package_manager(path, data)
-    if not hostcmd.which(command) and not Path(command).is_file():
-        return None
-    return command, ["run", picked]
+        return "npx", ["--yes", f"pnpm@{_pnpm_version(data)}", "run", picked]
+    return _package_manager(path, data), ["run", picked]
 
 
 def _port_from_workspace_apps(root: Path) -> int | None:
