@@ -3,7 +3,7 @@
   <id>org.mraurevox.HubDev</id>
   <name>Hub Dev</name>
   <summary>Loopback intégré et outils développeur (Mr-Aurevo-X Linux)</summary>
-  <url type="homepage">https://github.com/Mr-Aurevo-X/Hub-Dev</url>
+  <url type="homepage">https://github.com/Mr-Aurevo-X/Hub-Dev-Linux</url>
   <launchable type="desktop-id">org.mraurevox.HubDev.desktop</launchable>
   <content_rating type="oars-1.1"/>
   <releases>

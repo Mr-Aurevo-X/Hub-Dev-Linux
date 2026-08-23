@@ -9,13 +9,13 @@
 
 Loopback intégré (ex-LocalDock), ports locaux. Formats dev (JSON, .env) à venir.
 
-- **GitHub** : `Mr-Aurevo-X/Hub-Dev` (privé)
+- **GitHub** : `Mr-Aurevo-X/Hub-Dev-Linux` (privé)
 - **Plateforme** : voir [linux-platform](https://github.com/Mr-Aurevo-X/linux-platform)
 
 ## Installation / Install
 
 ```bash
-flatpak install --user -y https://github.com/Mr-Aurevo-X/Hub-Dev/releases/latest/download/org.mraurevox.HubDev.flatpak
+flatpak install --user -y https://github.com/Mr-Aurevo-X/Hub-Dev-Linux/releases/latest/download/org.mraurevox.HubDev.flatpak
 flatpak run org.mraurevox.HubDev
 ```
 
@@ -36,7 +36,7 @@ bash LANCER.sh
 
 Integrated loopback (ex-LocalDock), local ports. Dev formats (JSON, .env) coming later.
 
-- **GitHub**: `Mr-Aurevo-X/Hub-Dev` (private)
+- **GitHub**: `Mr-Aurevo-X/Hub-Dev-Linux` (private)
 - **Platform**: see [linux-platform](https://github.com/Mr-Aurevo-X/linux-platform)
 
 ### Privacy

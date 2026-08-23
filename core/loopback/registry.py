@@ -8,6 +8,7 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from core.loopback import scanner
 from core.paths import config_dir
 
 REGISTRY_VERSION = 1
@@ -89,6 +90,42 @@ class Registry:
     def validate_command(self, command: str) -> None:
         if not command or not _ALLOWED_CMD.match(command.split("/")[-1]):
             raise ValueError(f"commande refusée: {command!r}")
+
+    def add_allowed_root(self, path: str) -> None:
+        resolved = str(Path(path).expanduser().resolve())
+        if resolved not in self.allowed_roots:
+            self.allowed_roots.append(resolved)
+            self.save()
+
+    def remove_app(self, app_id: str) -> bool:
+        before = len(self.apps)
+        self.apps = [a for a in self.apps if a.id != app_id]
+        if len(self.apps) != before:
+            self.save()
+            return True
+        return False
+
+
+def add_app_from_proposal(proposal: scanner.ProposedApp, reg: Registry | None = None) -> str:
+    reg = reg or Registry.load()
+    app_id = proposal.name.lower().replace(" ", "-").replace("_", "-")
+    base = app_id
+    n = 2
+    while any(a.id == app_id for a in reg.apps):
+        app_id = f"{base}-{n}"
+        n += 1
+    entry = AppEntry(
+        id=app_id,
+        name=proposal.name,
+        cwd=proposal.cwd,
+        command=proposal.command,
+        args=proposal.args,
+        preferred_port=proposal.preferred_port,
+    )
+    reg.validate_command(entry.command)
+    reg.apps.append(entry)
+    reg.save()
+    return app_id
 
 
 def migrate_from_localdock() -> None:

@@ -10,7 +10,7 @@ import urllib.request
 from pathlib import Path
 
 FLATPAK_ID = "org.mraurevox.HubDev"
-RELEASE_REPO = "Mr-Aurevo-X/Hub-Dev"
+RELEASE_REPO = "Mr-Aurevo-X/Hub-Dev-Linux"
 RELEASES_API = f"https://api.github.com/repos/{RELEASE_REPO}/releases"
 ASSET_NAME = f"{FLATPAK_ID}.flatpak"
 

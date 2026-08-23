@@ -1,6 +1,8 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 from __future__ import annotations
 
+from typing import Any
+
 import gi
 
 gi.require_version("Gtk", "4.0")
@@ -11,6 +13,7 @@ from gi.repository import Adw, GLib, Gtk  # noqa: E402
 from core import i18n, settings as app_settings, updater
 from core.loopback.registry import migrate_from_localdock
 from ui.nav import NavSidebar, page_titles
+from ui.pages.json_page import JsonPage
 from ui.pages.loopback import LoopbackPage
 from ui_kit.dialogs.update import present as present_update_dialog
 from ui_kit.shell import ShellLayout, build_main_layout
@@ -25,19 +28,19 @@ class MainWindow(Adw.ApplicationWindow):
         self._settings = app_settings.load_settings()
         i18n.set_language(str(self._settings.get("language") or "fr"))
         self._stack = Gtk.Stack(transition_type=Gtk.StackTransitionType.CROSSFADE)
-        self._pages = {"loopback": LoopbackPage(self)}
-        for key, page in self._pages.items():
-            self._stack.add_named(page, key)
+        self._pages: dict[str, Gtk.Widget] = {}
         self._nav_sidebar = NavSidebar(
             settings=self._settings,
             on_page_selected=self._on_nav_page_selected,
             on_groups_changed=self._on_nav_groups_changed,
         )
+        last_page = app_settings.coerce_page(self._settings.get("last_page"))
+        self._ensure_page(last_page)
         titles = page_titles()
         layout = build_main_layout(
             self._nav_sidebar.widget,
             self._stack,
-            page_title=titles["loopback"],
+            page_title=titles.get(last_page, last_page),
             lang=i18n.language(),
         )
         layout.attach_chrome_buttons(
@@ -51,24 +54,41 @@ class MainWindow(Adw.ApplicationWindow):
         )
         self._layout: ShellLayout = layout
         self.set_content(layout.widget)
-        self._nav_sidebar.select_page("loopback", notify=False)
+        self._show_page(last_page, persist=False)
         GLib.timeout_add(2000, self._maybe_check_updates)
 
+    def _factory(self, key: str) -> Gtk.Widget:
+        if key == "loopback":
+            return LoopbackPage(self)
+        if key == "json_stub":
+            return JsonPage(self)
+        raise KeyError(key)
+
+    def _ensure_page(self, key: str) -> Gtk.Widget:
+        page = self._pages.get(key)
+        if page is not None:
+            return page
+        page = self._factory(key)
+        self._pages[key] = page
+        self._stack.add_named(page, key)
+        return page
+
     def _on_nav_page_selected(self, key: str) -> None:
-        if key not in self._pages:
-            return
+        self._ensure_page(key)
         self._show_page(key)
 
     def _on_nav_groups_changed(self, expanded: dict[str, bool]) -> None:
         self._settings["nav_groups_expanded"] = expanded
         app_settings.save_settings(self._settings)
 
-    def _show_page(self, key: str) -> None:
+    def _show_page(self, key: str, *, persist: bool = True) -> None:
+        self._ensure_page(key)
         self._stack.set_visible_child_name(key)
         titles = page_titles()
         self._layout.set_page_title(titles.get(key, key))
-        self._settings["last_page"] = key
-        app_settings.save_settings(self._settings)
+        if persist:
+            self._settings["last_page"] = key
+            app_settings.save_settings(self._settings)
         self._nav_sidebar.select_page(key, notify=False)
 
     def _apply_language(self, lang: str) -> None:
@@ -80,7 +100,7 @@ class MainWindow(Adw.ApplicationWindow):
         titles = page_titles()
         self._layout.set_page_title(titles.get(current, current))
 
-    def _save_prefs(self, snapshot: dict) -> None:
+    def _save_prefs(self, snapshot: dict[str, Any]) -> None:
         self._settings.update(snapshot)
         app_settings.save_settings(self._settings)
 

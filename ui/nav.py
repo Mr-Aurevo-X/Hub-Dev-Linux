@@ -47,7 +47,7 @@ def nav_groups() -> tuple[NavGroup, ...]:
                     "json_stub",
                     "text-x-script-symbolic",
                     "json_stub_title",
-                    enabled=False,
+                    enabled=True,
                 ),
             ),
         ),
