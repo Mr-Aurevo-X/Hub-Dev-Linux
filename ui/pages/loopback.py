@@ -74,6 +74,7 @@ class LoopbackPage(Gtk.Box):
         self._selected_id: str | None = None
         self._disk_cancel = threading.Event()
         self._disk_thread: threading.Thread | None = None
+        self._scan_hint = ""
         self.set_margin_top(12)
         self.set_margin_start(12)
         self.set_margin_end(12)
@@ -543,12 +544,19 @@ class LoopbackPage(Gtk.Box):
             self._disk_cancel.set()
             return
         self._disk_cancel.clear()
+        self._scan_hint = ""
         self._scan_btn.set_label(i18n.t("loopback_cancel_scan"))
         self._scan_status.set_text(i18n.t("loopback_scan_disk_running"))
 
+        def on_progress(path: str) -> None:
+            self._scan_hint = path
+
         def work() -> None:
             try:
-                added = registry.Registry.load().scan_disk(should_stop=self._disk_cancel.is_set)
+                added = registry.Registry.load().scan_disk(
+                    should_stop=self._disk_cancel.is_set,
+                    on_progress=on_progress,
+                )
             except PermissionError:
                 GLib.idle_add(self._on_disk_scan_done, 0, None)
                 return
@@ -559,6 +567,17 @@ class LoopbackPage(Gtk.Box):
 
         self._disk_thread = threading.Thread(target=work, daemon=True)
         self._disk_thread.start()
+        GLib.timeout_add(400, self._pulse_scan)
+
+    def _pulse_scan(self) -> bool:
+        thread = self._disk_thread
+        if thread is None or not thread.is_alive():
+            return False
+        hint = self._scan_hint
+        if hint:
+            shown = hint if len(hint) < 72 else f"…{hint[-69:]}"
+            self._scan_status.set_text(i18n.t("loopback_scan_disk_progress", path=shown))
+        return True
 
     def _on_disk_scan_done(self, added: int, error: str | None) -> bool:
         self._disk_thread = None

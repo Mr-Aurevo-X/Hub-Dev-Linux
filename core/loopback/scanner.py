@@ -26,6 +26,7 @@ SKIP_DIRS = {
     ".turbo",
     ".vercel",
     ".cursor",
+    ".vscode",
     "graphify-out",
     "__pycache__",
     "coverage",
@@ -41,6 +42,20 @@ SKIP_DIRS = {
     "timeshift",
     "lost+found",
     "netns",
+    ".snapshots",
+    ".var",
+    "AppData",
+    "Windows",
+    "Windows.old",
+    "Program Files",
+    "Program Files (x86)",
+    "ProgramData",
+    "$Recycle.Bin",
+    "System Volume Information",
+    "Recovery",
+    "PerfLogs",
+    "Application Data",
+    "Local Settings",
 }
 DEV_SCRIPT_PRIORITY = (
     "dev:local",
@@ -106,6 +121,8 @@ _VIRTUAL_FS = {
     "mqueue",
     "hugetlbfs",
     "configfs",
+    "devpts",
+    "binfmt_misc",
 }
 _SKIP_MOUNT = {"/", "/boot", "/boot/efi", "/boot/efi2", "/run/host", "/run/host/root"}
 _SKIP_PATH_TOKENS = (
@@ -113,9 +130,37 @@ _SKIP_PATH_TOKENS = (
     "/docker/netns",
     "/run/docker/",
     "/var/lib/docker/",
+    "/.snapshots",
+    "/run/flatpak",
+)
+_USER_DISK_PREFIXES = ("/run/media/", "/media/", "/mnt/")
+_FIXED_DISK_ROOTS = (
+    Path("/home"),
+    Path("/opt"),
+    Path("/srv"),
+    Path("/var/www"),
+    Path("/mnt"),
+    Path("/media"),
+)
+_DETECT_MARKERS = frozenset(
+    {
+        "package.json",
+        "manage.py",
+        "app.py",
+        "main.py",
+        "wsgi.py",
+        "artisan",
+        "Gemfile",
+        "Makefile",
+        "compose.yaml",
+        "compose.yml",
+        "docker-compose.yml",
+        "docker-compose.yaml",
+    }
 )
 _DISK_MAX_DEPTH = 12
 StopCheck = Callable[[], bool]
+ProgressCb = Callable[[str], None]
 
 
 @dataclass
@@ -139,6 +184,46 @@ def should_skip_path(path: str | Path) -> bool:
     if any(token in raw for token in _SKIP_PATH_TOKENS):
         return True
     return Path(path).name in SKIP_DIRS
+
+
+def unescape_mount(dest: str) -> str:
+    return (
+        dest.replace("\\040", " ")
+        .replace("\\011", "\t")
+        .replace("\\012", "\n")
+        .replace("\\134", "\\")
+    )
+
+
+def parse_proc_mounts(text: str) -> list[tuple[str, str]]:
+    rows: list[tuple[str, str]] = []
+    for line in text.splitlines():
+        parts = line.split()
+        if len(parts) < 3:
+            continue
+        rows.append((unescape_mount(parts[1]), parts[2]))
+    return rows
+
+
+def is_user_disk_mount(dest: str, fstype: str) -> bool:
+    if fstype in _VIRTUAL_FS or fstype.startswith(("fuse.portal", "fuse.gvfs")):
+        return False
+    if dest in _SKIP_MOUNT or should_skip_path(dest):
+        return False
+    return dest.startswith(_USER_DISK_PREFIXES)
+
+
+def extra_mount_roots(text: str) -> list[Path]:
+    return [Path(dest) for dest, fstype in parse_proc_mounts(text) if is_user_disk_mount(dest, fstype)]
+
+
+def collapse_nested_roots(roots: list[Path]) -> list[Path]:
+    kept: list[Path] = []
+    for root in sorted(roots, key=lambda path: (len(path.parts), str(path))):
+        if any(root == parent or parent in root.parents for parent in kept):
+            continue
+        kept.append(root)
+    return kept
 
 
 def normalize_root(path: str | Path) -> Path:
@@ -190,7 +275,7 @@ def is_launchable(proposal: ProposedApp) -> bool:
     if proposal.preferred_port is None:
         return False
     cwd = Path(proposal.cwd)
-    if not cwd.is_dir():
+    if not _is_dir(cwd):
         return False
     command = proposal.command
     direct = Path(command)
@@ -207,6 +292,7 @@ def scan_root(
     max_depth: int = 8,
     *,
     should_stop: StopCheck | None = None,
+    on_progress: ProgressCb | None = None,
 ) -> list[ProposedApp]:
     proposals: list[ProposedApp] = []
     try:
@@ -216,34 +302,18 @@ def scan_root(
         if should_skip_path(start) or not _is_dir(start):
             return []
     try:
-        _scan_dir(start, 0, max_depth, proposals, should_stop)
+        _scan_dir(start, 0, max_depth, proposals, should_stop, on_progress)
     except OSError:
         return proposals
     return proposals
 
 
 def disk_scan_roots() -> list[Path]:
-    candidates = [
-        Path.home(),
-        Path("/home"),
-        Path("/opt"),
-        Path("/srv"),
-        Path("/var/www"),
-        Path("/mnt"),
-        Path("/media"),
-    ]
     try:
         mounts = Path("/proc/mounts").read_text(encoding="utf-8", errors="replace")
     except OSError:
         mounts = ""
-    for line in mounts.splitlines():
-        parts = line.split()
-        if len(parts) < 3:
-            continue
-        dest, fstype = parts[1], parts[2]
-        if fstype in _VIRTUAL_FS or dest in _SKIP_MOUNT or should_skip_path(dest):
-            continue
-        candidates.append(Path(dest))
+    candidates = [Path.home(), *_FIXED_DISK_ROOTS, *extra_mount_roots(mounts)]
     roots: list[Path] = []
     seen: set[str] = set()
     for raw in candidates:
@@ -258,7 +328,7 @@ def disk_scan_roots() -> list[Path]:
             continue
         seen.add(key)
         roots.append(resolved)
-    return roots
+    return collapse_nested_roots(roots)
 
 
 def scan_disk(
@@ -267,6 +337,7 @@ def scan_disk(
     require_launchable: bool = True,
     max_depth: int = _DISK_MAX_DEPTH,
     should_stop: StopCheck | None = None,
+    on_progress: ProgressCb | None = None,
 ) -> list[ProposedApp]:
     start_roots = list(roots) if roots is not None else disk_scan_roots()
     seen: set[tuple[str, str]] = set()
@@ -275,7 +346,12 @@ def scan_disk(
         if should_stop and should_stop():
             break
         try:
-            found = scan_root(root, max_depth=max_depth, should_stop=should_stop)
+            found = scan_root(
+                root,
+                max_depth=max_depth,
+                should_stop=should_stop,
+                on_progress=on_progress,
+            )
         except OSError:
             continue
         for proposal in found:
@@ -307,29 +383,37 @@ def _scan_dir(
     max_depth: int,
     out: list[ProposedApp],
     should_stop: StopCheck | None,
+    on_progress: ProgressCb | None = None,
 ) -> None:
     if should_stop and should_stop():
         return
     if depth > max_depth:
         return
-    out.extend(detect_in_dir(path))
-    if depth == max_depth:
-        return
+    if on_progress is not None:
+        on_progress(str(path))
     try:
-        children = list(path.iterdir())
+        entries = list(os.scandir(path))
     except OSError:
         return
-    for child in children:
+    names = {entry.name for entry in entries}
+    if names & _DETECT_MARKERS:
+        out.extend(detect_in_dir(path))
+    if depth == max_depth:
+        return
+    for entry in entries:
         if should_stop and should_stop():
             return
         try:
-            if child.is_symlink() or not _is_dir(child) or should_skip_path(child):
-                continue
-            if child.name == "fixtures" and path.name in {"test", "tests"}:
+            if entry.is_symlink() or not entry.is_dir(follow_symlinks=False):
                 continue
         except OSError:
             continue
-        _scan_dir(child, depth + 1, max_depth, out, should_stop)
+        child = Path(entry.path)
+        if should_skip_path(child):
+            continue
+        if entry.name == "fixtures" and path.name in {"test", "tests"}:
+            continue
+        _scan_dir(child, depth + 1, max_depth, out, should_stop, on_progress)
 
 
 def _read_head(path: Path, limit: int = 12000) -> str:
@@ -505,10 +589,14 @@ def _python_cmd(path: Path) -> str:
 
 
 def _detect_python(path: Path) -> ProposedApp | None:
+    django = path / "manage.py"
+    py_files = [name for name in ("app.py", "main.py", "wsgi.py") if (path / name).is_file()]
+    if not django.is_file() and not py_files:
+        return None
     command = _python_cmd(path)
-    if (path / "manage.py").is_file():
+    if django.is_file():
         return ProposedApp(path.name, str(path), command, ["manage.py", "runserver", "127.0.0.1:8000"], 8000)
-    for name in ("app.py", "main.py", "wsgi.py"):
+    for name in py_files:
         text = _read_head(path / name)
         if not text:
             continue

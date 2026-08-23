@@ -36,6 +36,26 @@ def test_which_uses_shutil_outside_flatpak(monkeypatch) -> None:
     assert hostcmd.which("pnpm") is None
 
 
+def test_which_caches_flatpak_spawn(monkeypatch) -> None:
+    hostcmd._WHICH_HOST.clear()
+    monkeypatch.setenv("FLATPAK_ID", "org.mraurevox.HubDev")
+    calls = {"n": 0}
+
+    class Fake:
+        returncode = 0
+        stdout = "/usr/bin/npm\n"
+
+    def fake_run(*_args, **_kwargs):
+        calls["n"] += 1
+        return Fake()
+
+    monkeypatch.setattr(hostcmd.subprocess, "run", fake_run)
+    assert hostcmd.which("npm") == "/usr/bin/npm"
+    assert hostcmd.which("npm") == "/usr/bin/npm"
+    assert calls["n"] == 1
+    hostcmd._WHICH_HOST.clear()
+
+
 def test_useful_log_tail_drops_npm_notice() -> None:
     raw = "npm notice run mr-x-sentinel@2.0.0 dev\nsh: ligne 1: pnpm: commande introuvable\n"
     assert "npm notice" not in hostcmd.useful_log_tail(raw)

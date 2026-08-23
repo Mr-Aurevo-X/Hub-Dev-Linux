@@ -11,6 +11,7 @@ from pathlib import Path
 from core.paths import data_dir
 
 _FORWARDED_ENV = ("PATH", "HOST", "HOSTNAME")
+_WHICH_HOST: dict[str, str | None] = {}
 
 
 def in_flatpak() -> bool:
@@ -24,6 +25,8 @@ def prefix() -> list[str]:
 def which(command: str) -> str | None:
     if not in_flatpak():
         return shutil.which(command)
+    if command in _WHICH_HOST:
+        return _WHICH_HOST[command]
     try:
         out = subprocess.run(
             ["flatpak-spawn", "--host", "--", "which", command],
@@ -33,11 +36,12 @@ def which(command: str) -> str | None:
             check=False,
         )
     except (OSError, subprocess.SubprocessError):
-        return None
-    line = (out.stdout or "").strip().splitlines()
-    if out.returncode != 0 or not line:
-        return None
-    return line[0]
+        found = None
+    else:
+        line = (out.stdout or "").strip().splitlines()
+        found = line[0] if out.returncode == 0 and line else None
+    _WHICH_HOST[command] = found
+    return found
 
 
 def spawn_argv(

@@ -20,6 +20,7 @@ _STRINGS: dict[str, dict[str, str]] = {
     "loopback_scan": {"fr": "Scanner", "en": "Scan"},
     "loopback_scan_disk": {"fr": "Scanner", "en": "Scan"},
     "loopback_scan_disk_running": {"fr": "Scan de tous les disques…", "en": "Scanning all disks…"},
+    "loopback_scan_disk_progress": {"fr": "Scan… {path}", "en": "Scanning… {path}"},
     "loopback_scan_disk_done": {"fr": "{count} serveur(s) lançable(s)", "en": "{count} launchable server(s)"},
     "loopback_cancel_scan": {"fr": "Annuler le scan", "en": "Cancel scan"},
     "loopback_clear_scan": {"fr": "Clear scan", "en": "Clear scan"},

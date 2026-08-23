@@ -51,6 +51,44 @@ def test_should_skip_docker_netns() -> None:
     assert scanner.should_skip_path("/run/host")
     assert scanner.should_skip_path("/run/docker/netns/abc")
     assert scanner.should_skip_path(Path("/var/lib/docker/overlay2")) is True
+    assert scanner.should_skip_path("/.snapshots/1")
+    assert scanner.should_skip_path("/run/media/u/Win/Windows")
+    assert scanner.should_skip_path("/run/media/u/Win/Users/aurel/AppData")
+    assert scanner.should_skip_path("/run/media/u/Win/Users/aurel/.vscode")
+
+
+def test_extra_mount_roots_keep_user_disks_only() -> None:
+    text = "\n".join(
+        [
+            "x /usr btrfs rw 0 0",
+            "x /app btrfs rw 0 0",
+            "x /.snapshots btrfs rw 0 0",
+            "x /run/flatpak/doc fuse.portal rw 0 0",
+            "x /home btrfs rw 0 0",
+            "x /run/media/u/Game\\040Base ntfs3 rw 0 0",
+            "x /mnt/data ext4 rw 0 0",
+            "x /dev/pts devpts rw 0 0",
+        ]
+    )
+    got = {str(path) for path in scanner.extra_mount_roots(text)}
+    assert got == {"/run/media/u/Game Base", "/mnt/data"}
+
+
+def test_collapse_nested_roots(tmp_path) -> None:
+    child = tmp_path / "user"
+    child.mkdir()
+    assert scanner.collapse_nested_roots([child, tmp_path]) == [tmp_path]
+
+
+def test_detect_python_does_not_spawn_which_on_empty_dirs(tmp_path, monkeypatch) -> None:
+    for index in range(8):
+        (tmp_path / f"empty-{index}").mkdir()
+
+    def boom(cmd: str) -> str | None:
+        raise AssertionError(f"which should not run on empty dirs: {cmd}")
+
+    monkeypatch.setattr(hostcmd, "which", boom)
+    assert scanner.scan_root(tmp_path) == []
 
 
 def test_scan_disk_skips_forbidden_root_and_keeps_ok(tmp_path, monkeypatch) -> None:
