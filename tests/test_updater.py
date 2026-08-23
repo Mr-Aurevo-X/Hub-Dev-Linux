@@ -29,9 +29,11 @@ def test_parse_latest_release_requires_flatpak_asset() -> None:
     assert info is not None
     assert info["version"] == "1.2.0"
     assert info["flatpak_url"].endswith("org.mraurevox.HubDev.flatpak")
-    assert "flatpak install --user -y https://example.test/org.mraurevox.HubDev.flatpak" == (
-        updater.format_update_dialog_commands(info)
-    )
+    commands = updater.format_update_dialog_commands(info)
+    assert "rm -f org.mraurevox.HubDev.flatpak" in commands
+    assert "wget --no-continue -O org.mraurevox.HubDev.flatpak" in commands
+    assert "https://example.test/org.mraurevox.HubDev.flatpak" in commands
+    assert "flatpak install --user -y --reinstall ./org.mraurevox.HubDev.flatpak" in commands
     body = updater.format_update_dialog_body(info)
     assert "http" not in body
     assert "Lounge" not in body

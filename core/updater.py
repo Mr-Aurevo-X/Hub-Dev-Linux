@@ -93,8 +93,13 @@ def _semver_gt(a: str, b: str) -> bool:
 
 
 def format_update_dialog_commands(info: dict) -> str:
-    url = info.get("flatpak_url") or ""
-    return f"flatpak install --user -y {url}"
+    url = str(info.get("flatpak_url") or "")
+    return (
+        f"rm -f {ASSET_NAME}\n"
+        f"wget --no-continue -O {ASSET_NAME} \\\n  {url}\n"
+        f"flatpak install --user -y --reinstall ./{ASSET_NAME}\n"
+        f"flatpak run {FLATPAK_ID}"
+    )
 
 
 def format_update_dialog_body(info: dict) -> str:
