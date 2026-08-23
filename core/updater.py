@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 import ssl
+import time
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -12,7 +13,10 @@ from pathlib import Path
 FLATPAK_ID = "org.mraurevox.HubDev"
 RELEASE_REPO = "Mr-Aurevo-X/Hub-Dev-Linux"
 RELEASES_API = f"https://api.github.com/repos/{RELEASE_REPO}/releases"
+RELEASES_LATEST_API = f"{RELEASES_API}/latest"
+RELEASES_LIST_API = f"{RELEASES_API}?per_page=5"
 ASSET_NAME = f"{FLATPAK_ID}.flatpak"
+_TRANSIENT_HTTP = frozenset({502, 503, 504})
 
 
 def local_version() -> str:
@@ -34,24 +38,57 @@ def app_display_name() -> str:
     return "Hub Dev"
 
 
-def _fetch_latest() -> dict | None:
+def _http_json(url: str, timeout: float = 12.0) -> object:
     req = urllib.request.Request(
-        RELEASES_API,
+        url,
         headers={"Accept": "application/vnd.github+json", "User-Agent": "Hub Dev"},
     )
-    try:
-        with urllib.request.urlopen(req, context=ssl.create_default_context(), timeout=12) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
-    except (urllib.error.URLError, json.JSONDecodeError, TimeoutError):
-        return None
-    return parse_latest_release(data)
+    last_error: BaseException | None = None
+    for attempt in range(3):
+        try:
+            with urllib.request.urlopen(req, context=ssl.create_default_context(), timeout=timeout) as resp:
+                return json.loads(resp.read().decode("utf-8"))
+        except urllib.error.HTTPError as exc:
+            last_error = exc
+            if exc.code in _TRANSIENT_HTTP and attempt < 2:
+                time.sleep(0.4 * (attempt + 1))
+                continue
+            raise
+        except (urllib.error.URLError, json.JSONDecodeError, TimeoutError):
+            raise
+    if last_error is None:
+        raise urllib.error.URLError("GitHub release unavailable")
+    raise last_error
+
+
+def _fetch_latest() -> dict | None:
+    last_error: BaseException | None = None
+    for url in (RELEASES_LATEST_API, RELEASES_LIST_API):
+        try:
+            data = _http_json(url)
+        except urllib.error.HTTPError as exc:
+            last_error = exc
+            if exc.code in _TRANSIENT_HTTP:
+                continue
+            return None
+        except (urllib.error.URLError, json.JSONDecodeError, TimeoutError):
+            return None
+        parsed = parse_latest_release(data)
+        if parsed is not None:
+            return parsed
+    _ = last_error
+    return None
 
 
 def parse_latest_release(data: object) -> dict | None:
-    if not isinstance(data, list) or not data:
-        return None
-    release = data[0]
-    if not isinstance(release, dict):
+    if isinstance(data, dict):
+        release = data
+    elif isinstance(data, list) and data:
+        first = data[0]
+        if not isinstance(first, dict):
+            return None
+        release = first
+    else:
         return None
     tag = str(release.get("tag_name") or "").lstrip("vV")
     url = ""
