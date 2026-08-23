@@ -27,6 +27,8 @@ modules:
         ${FLATPAK_DEST}/share/metainfo/org.mraurevox.HubDev.metainfo.xml
       - install -Dm644 packaging/flatpak/org.mraurevox.HubDev.svg
         ${FLATPAK_DEST}/share/icons/hicolor/scalable/apps/org.mraurevox.HubDev.svg
+      - install -Dm644 packaging/flatpak/org.mraurevox.HubDev.png
+        ${FLATPAK_DEST}/share/icons/hicolor/128x128/apps/org.mraurevox.HubDev.png
     sources:
       - type: dir
         path: ../..
