@@ -13,8 +13,15 @@ from pathlib import Path
 from typing import Any
 
 _LINE = re.compile(r"^\s*\w+\s+\w+\s+\w+\s+(\S+):(\d+)\s+\S+:\*\s+users:\(\(\"([^\"]+)\",pid=(\d+)")
-_COMMON_PORTS = (5173, 3000, 4173, 8080, 4321, 8000, 24678)
-_NODE_COMMANDS = {"npm", "pnpm", "yarn", "node", "vite"}
+_COMMON_PORTS = (5173, 3000, 4173, 8080, 4321, 8000, 24678, 5000, 4200, 6006, 8501, 7860)
+_NODE_COMMANDS = {"npm", "pnpm", "yarn", "bun", "node", "vite"}
+_PORT_FLAG = re.compile(r"(?:--port|-p|--listen)\s*[=\s]+(\d{2,5})", re.I)
+_CONFIG_PORT = re.compile(r"\bport\s*[:=]\s*(\d{2,5})\b")
+_ENV_PORT = re.compile(r"^(?:PORT|VITE_PORT|DEV_PORT|APP_PORT|HTTP_PORT)\s*=\s*(\d{2,5})\s*$", re.M)
+_ENV_FILES = (".env", ".env.local", ".env.development")
+_VITE_CONFIGS = ("vite.config.ts", "vite.config.js", "vite.config.mjs")
+_NEXT_CONFIGS = ("next.config.js", "next.config.mjs", "next.config.ts")
+_PORT_CONFIGS = _VITE_CONFIGS + _NEXT_CONFIGS + ("astro.config.mjs", "nuxt.config.ts", "nuxt.config.js")
 
 
 @dataclass
@@ -26,19 +33,79 @@ class PortRow:
     is_loopback: bool
 
 
-def guess_preferred_port(path: str | Path, scripts: dict[str, str] | None = None) -> int | None:
-    root = Path(path)
-    for name in ("vite.config.ts", "vite.config.js", "vite.config.mjs"):
-        if (root / name).is_file():
-            return 5173
-    for name in ("next.config.js", "next.config.mjs", "next.config.ts"):
-        if (root / name).is_file():
-            return 3000
+def _valid_port(raw: str | int) -> int | None:
+    try:
+        port = int(raw)
+    except (TypeError, ValueError):
+        return None
+    if 1 <= port <= 65535:
+        return port
+    return None
+
+
+def _read_text(path: Path, limit: int = 20000) -> str:
+    try:
+        return path.read_text(encoding="utf-8", errors="replace")[:limit]
+    except OSError:
+        return ""
+
+
+def _port_from_scripts(scripts: dict[str, str] | None) -> int | None:
     blob = " ".join(str(value) for value in (scripts or {}).values())
+    flagged = _PORT_FLAG.search(blob)
+    if flagged:
+        return _valid_port(flagged.group(1))
     for port in _COMMON_PORTS:
         if str(port) in blob:
             return port
     return None
+
+
+def _port_from_env(root: Path) -> int | None:
+    for name in _ENV_FILES:
+        match = _ENV_PORT.search(_read_text(root / name, 8000))
+        if match:
+            return _valid_port(match.group(1))
+    return None
+
+
+def _port_from_config_literal(root: Path) -> int | None:
+    for name in _PORT_CONFIGS:
+        match = _CONFIG_PORT.search(_read_text(root / name))
+        if match:
+            return _valid_port(match.group(1))
+    return None
+
+
+def _framework_default_port(root: Path, scripts: dict[str, str] | None) -> int | None:
+    names = " ".join(str(key) for key in (scripts or {}))
+    blob = " ".join(str(value) for value in (scripts or {}).values())
+    text = f"{names} {blob}".lower()
+    if any((root / name).is_file() for name in _VITE_CONFIGS) or "vite" in text or "dev:local" in text:
+        return 5173
+    if any((root / name).is_file() for name in _NEXT_CONFIGS) or "next" in text:
+        return 3000
+    if (root / "nuxt.config.ts").is_file() or (root / "nuxt.config.js").is_file() or "nuxt" in text:
+        return 3000
+    if (root / "astro.config.mjs").is_file() or "astro" in text:
+        return 4321
+    if "storybook" in text:
+        return 6006
+    if "ng serve" in text or "angular" in text:
+        return 4200
+    if (root / "manage.py").is_file() or (root / "artisan").is_file():
+        return 8000
+    return None
+
+
+def guess_preferred_port(path: str | Path, scripts: dict[str, str] | None = None) -> int | None:
+    root = Path(path)
+    return (
+        _port_from_scripts(scripts)
+        or _port_from_env(root)
+        or _port_from_config_literal(root)
+        or _framework_default_port(root, scripts)
+    )
 
 
 def _pid_cwd(pid: int) -> Path | None:

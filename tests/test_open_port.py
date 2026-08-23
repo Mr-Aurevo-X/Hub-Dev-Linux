@@ -22,6 +22,17 @@ def test_guess_preferred_port_from_script_text(tmp_path) -> None:
     assert guess_preferred_port(root, scripts={"dev:local": "node scripts/dev.mjs --port 4173"}) == 4173
 
 
+def test_guess_preferred_port_from_env_and_vite_literal(tmp_path) -> None:
+    env_app = tmp_path / "env-app"
+    env_app.mkdir()
+    (env_app / ".env").write_text("PORT=4090\n", encoding="utf-8")
+    assert guess_preferred_port(env_app) == 4090
+    vite = tmp_path / "vite-port"
+    vite.mkdir()
+    (vite / "vite.config.ts").write_text("export default { server: { port: 4000 } }\n", encoding="utf-8")
+    assert guess_preferred_port(vite) == 4000
+
+
 def test_resolve_open_port_prefers_declared() -> None:
     app = AppEntry(id="a", name="a", cwd="/tmp", command="pnpm", preferred_port=5173)
     assert resolve_open_port(app, is_running=False, rows=[]) == 5173

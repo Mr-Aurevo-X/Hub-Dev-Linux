@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import shlex
+import threading
 import webbrowser
 from pathlib import Path
 
@@ -69,6 +70,8 @@ class LoopbackPage(Gtk.Box):
         super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=8)
         self._window = window
         self._selected_id: str | None = None
+        self._disk_cancel = threading.Event()
+        self._disk_thread: threading.Thread | None = None
         self.set_margin_top(12)
         self.set_margin_start(12)
         self.set_margin_end(12)
@@ -77,14 +80,17 @@ class LoopbackPage(Gtk.Box):
         toolbar = Gtk.Box(spacing=8)
         add_root_btn = Gtk.Button(label=i18n.t("loopback_add_root"))
         scan_btn = Gtk.Button(label=i18n.t("loopback_scan"))
+        self._disk_btn = Gtk.Button(label=i18n.t("loopback_scan_disk"))
         refresh_btn = Gtk.Button(label=i18n.t("loopback_refresh_ports"))
         form_btn = Gtk.Button(label=i18n.t("loopback_add_edit"))
         add_root_btn.connect("clicked", lambda *_: self._pick_root())
         scan_btn.connect("clicked", lambda *_: self._scan(notify=True))
+        self._disk_btn.connect("clicked", lambda *_: self._toggle_disk_scan())
         refresh_btn.connect("clicked", lambda *_: self._reload_ports())
         form_btn.connect("clicked", lambda *_: self._open_app_form())
         toolbar.append(add_root_btn)
         toolbar.append(scan_btn)
+        toolbar.append(self._disk_btn)
         toolbar.append(refresh_btn)
         toolbar.append(form_btn)
 
@@ -119,7 +125,10 @@ class LoopbackPage(Gtk.Box):
         self._ports.add_css_class("boxed-list")
         self._history_label = Gtk.Label(xalign=0, wrap=True)
         self._history_label.add_css_class("dim-label")
+        self._scan_status = Gtk.Label(xalign=0, wrap=True)
+        self._scan_status.add_css_class("dim-label")
         self.append(toolbar)
+        self.append(self._scan_status)
         self.append(path_row)
         self.append(Gtk.Label(label=i18n.t("loopback_explorer"), xalign=0))
         self.append(actions)
@@ -224,10 +233,13 @@ class LoopbackPage(Gtk.Box):
         name = Gtk.Label(label=app.name, wrap=True, justify=Gtk.Justification.CENTER)
         name.add_css_class("loopback-tile-name")
         name.set_max_width_chars(16)
+        launch = f"{app.command} {shlex.join(app.args)}".strip()
+        if len(launch) > 32:
+            launch = launch[:31] + "…"
         if running and app.preferred_port:
             meta_text = f"{i18n.t('loopback_running')} :{app.preferred_port}"
         elif app.preferred_port:
-            meta_text = f"{i18n.t('loopback_stopped')} :{app.preferred_port}"
+            meta_text = f"{launch} :{app.preferred_port}"
         else:
             meta_text = i18n.t("loopback_running") if running else i18n.t("loopback_stopped")
         meta = Gtk.Label(label=meta_text, wrap=True, justify=Gtk.Justification.CENTER)
@@ -506,6 +518,39 @@ class LoopbackPage(Gtk.Box):
             self._info(i18n.t("loopback_scan_done", count=str(added)))
         self._reload_apps()
         self._reload_history()
+
+    def _toggle_disk_scan(self) -> None:
+        if self._disk_thread is not None and self._disk_thread.is_alive():
+            self._disk_cancel.set()
+            return
+        self._disk_cancel.clear()
+        self._disk_btn.set_label(i18n.t("loopback_cancel_scan"))
+        self._scan_status.set_text(i18n.t("loopback_scan_disk_running"))
+
+        def work() -> None:
+            try:
+                added = registry.Registry.load().scan_disk(should_stop=self._disk_cancel.is_set)
+            except (OSError, RuntimeError, ValueError) as exc:
+                GLib.idle_add(self._on_disk_scan_done, 0, str(exc))
+                return
+            GLib.idle_add(self._on_disk_scan_done, added, None)
+
+        self._disk_thread = threading.Thread(target=work, daemon=True)
+        self._disk_thread.start()
+
+    def _on_disk_scan_done(self, added: int, error: str | None) -> bool:
+        self._disk_thread = None
+        self._disk_btn.set_label(i18n.t("loopback_scan_disk"))
+        if error:
+            self._scan_status.set_text("")
+            self._error(error)
+            return False
+        history.append("scan-disk", str(added))
+        self._scan_status.set_text(i18n.t("loopback_scan_disk_done", count=str(added)))
+        self._info(i18n.t("loopback_scan_disk_done", count=str(added)))
+        self._reload_apps()
+        self._reload_history()
+        return False
 
     def _reload_ports(self) -> bool:
         self._clear(self._ports)

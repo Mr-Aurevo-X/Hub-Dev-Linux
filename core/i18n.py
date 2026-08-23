@@ -18,6 +18,10 @@ _STRINGS: dict[str, dict[str, str]] = {
     "json_stub_title": {"fr": "JSON", "en": "JSON"},
     "env_stub_title": {"fr": ".env", "en": ".env"},
     "loopback_scan": {"fr": "Scanner", "en": "Scan"},
+    "loopback_scan_disk": {"fr": "Scan disque", "en": "Scan disk"},
+    "loopback_scan_disk_running": {"fr": "Scan disque en cours…", "en": "Disk scan running…"},
+    "loopback_scan_disk_done": {"fr": "{count} serveur(s) lançable(s)", "en": "{count} launchable server(s)"},
+    "loopback_cancel_scan": {"fr": "Annuler le scan", "en": "Cancel scan"},
     "loopback_add_root": {"fr": "Ajouter racine", "en": "Add root"},
     "loopback_link_path": {"fr": "Lier", "en": "Link"},
     "loopback_paste_hint": {"fr": "Coller un dossier…", "en": "Paste a folder…"},
@@ -27,8 +31,8 @@ _STRINGS: dict[str, dict[str, str]] = {
     "loopback_running": {"fr": "En cours", "en": "Running"},
     "loopback_stopped": {"fr": "Arrêté", "en": "Stopped"},
     "loopback_no_apps": {
-        "fr": "Aucun serveur. Lie un dossier (ou dépose-le ici) puis scanne.",
-        "en": "No servers. Link a folder (or drop it here) then scan.",
+        "fr": "Aucun serveur lançable. Scan disque, ou lie un dossier puis scanne.",
+        "en": "No launchable servers. Scan the disk, or link a folder then scan.",
     },
     "loopback_bad_root": {
         "fr": "Dossier ignoré (chemin invalide ou dossier système).",

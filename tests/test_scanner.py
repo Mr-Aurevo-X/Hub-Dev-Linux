@@ -84,3 +84,74 @@ def test_apps_grouped_by_root(tmp_path) -> None:
     assert groups[0][0] == str(root.resolve())
     assert [a.id for a in groups[0][1]] == ["factory-x"]
     assert groups[1][1][0].id == "other"
+
+
+def test_scan_skips_lint_only_package(tmp_path) -> None:
+    _write_pkg(tmp_path, {"lint": "eslint .", "test": "vitest"})
+    assert scanner.scan_root(tmp_path) == []
+
+
+def test_scan_finds_preview_and_reads_port(tmp_path) -> None:
+    _write_pkg(tmp_path, {"preview": "vite preview --port 4173"})
+    hits = scanner.scan_root(tmp_path)
+    assert len(hits) == 1
+    assert hits[0].args == ["run", "preview"]
+    assert hits[0].preferred_port == 4173
+
+
+def test_scan_finds_flask_and_fastapi(tmp_path) -> None:
+    flask_dir = tmp_path / "flask-app"
+    flask_dir.mkdir()
+    (flask_dir / "app.py").write_text("from flask import Flask\napp = Flask(__name__)\n", encoding="utf-8")
+    api = tmp_path / "api"
+    api.mkdir()
+    (api / "main.py").write_text("from fastapi import FastAPI\napp = FastAPI()\n", encoding="utf-8")
+    hits = {item.name: item for item in scanner.scan_root(tmp_path)}
+    assert hits["flask-app"].command in {"python", "python3"}
+    assert hits["flask-app"].preferred_port == 5000
+    assert "flask" in " ".join(hits["flask-app"].args).lower() or hits["flask-app"].args[0] == "-m"
+    assert hits["api"].preferred_port == 8000
+    assert "uvicorn" in " ".join([hits["api"].command, *hits["api"].args])
+
+
+def test_scan_finds_artisan_and_compose(tmp_path) -> None:
+    artisan = tmp_path / "laravel"
+    artisan.mkdir()
+    (artisan / "artisan").write_text("#!/usr/bin/env php\n", encoding="utf-8")
+    compose = tmp_path / "stack"
+    compose.mkdir()
+    (compose / "compose.yaml").write_text(
+        "services:\n  web:\n    ports:\n      - '127.0.0.1:8088:80'\n",
+        encoding="utf-8",
+    )
+    hits = {item.name: item for item in scanner.scan_root(tmp_path)}
+    assert hits["laravel"].command == "php"
+    assert hits["laravel"].args[:2] == ["artisan", "serve"]
+    assert hits["laravel"].preferred_port == 8000
+    assert hits["stack"].preferred_port == 8088
+    assert hits["stack"].command in {"docker", "docker-compose"}
+
+
+def test_is_launchable_requires_command_and_port(tmp_path, monkeypatch) -> None:
+    from core.loopback.scanner import ProposedApp
+
+    app = ProposedApp("demo", str(tmp_path), "pnpm", ["run", "dev"], 5173)
+    monkeypatch.setattr(scanner.shutil, "which", lambda cmd: None)
+    assert scanner.is_launchable(app) is False
+    monkeypatch.setattr(scanner.shutil, "which", lambda cmd: f"/usr/bin/{cmd}")
+    assert scanner.is_launchable(app) is True
+    no_port = ProposedApp("demo", str(tmp_path), "pnpm", ["run", "dev"], None)
+    assert scanner.is_launchable(no_port) is False
+
+
+def test_scan_disk_only_keeps_launchable(tmp_path, monkeypatch) -> None:
+    _write_pkg(tmp_path / "ok", {"dev": "vite"}, pnpm=True)
+    (tmp_path / "ok" / "vite.config.ts").write_text("export default {}\n", encoding="utf-8")
+    _write_pkg(tmp_path / "lint-only", {"lint": "eslint ."})
+    monkeypatch.setattr(scanner.shutil, "which", lambda cmd: f"/usr/bin/{cmd}" if cmd in {"pnpm", "npm"} else None)
+    hits = scanner.scan_disk(roots=[tmp_path], require_launchable=True)
+    names = {item.name for item in hits}
+    assert "ok" in names
+    assert "lint-only" not in names
+    assert all(item.preferred_port for item in hits)
+    assert all(item.command and item.args for item in hits)

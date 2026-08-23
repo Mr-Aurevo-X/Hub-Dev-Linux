@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 import re
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -240,20 +241,28 @@ class Registry:
         return True
 
     def scan_apps(self) -> int:
-        added = 0
         roots = [Path(raw) for raw in self.allowed_roots if Path(raw).is_dir()]
         if not roots:
             return 0
+        proposals: list[scanner.ProposedApp] = []
         for root in roots:
-            for proposal in scanner.scan_root(root):
-                if any(app.cwd == proposal.cwd and app.command == proposal.command for app in self.apps):
-                    continue
-                try:
-                    add_app_from_proposal(proposal, self)
-                    self.apps = type(self).load().apps
-                    added += 1
-                except ValueError:
-                    continue
+            proposals.extend(scanner.scan_root(root))
+        return self._ingest(proposal for proposal in proposals if scanner.is_launchable(proposal))
+
+    def scan_disk(self, should_stop: scanner.StopCheck | None = None) -> int:
+        return self._ingest(scanner.scan_disk(require_launchable=True, should_stop=should_stop))
+
+    def _ingest(self, proposals: Iterable[scanner.ProposedApp]) -> int:
+        added = 0
+        for proposal in proposals:
+            if any(app.cwd == proposal.cwd and app.command == proposal.command for app in self.apps):
+                continue
+            try:
+                add_app_from_proposal(proposal, self)
+                self.apps = type(self).load().apps
+                added += 1
+            except ValueError:
+                continue
         return added
 
     def remove_app(self, app_id: str) -> bool:
