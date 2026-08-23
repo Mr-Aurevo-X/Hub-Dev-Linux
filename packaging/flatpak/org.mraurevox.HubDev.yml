@@ -1,0 +1,30 @@
+app-id: org.mraurevox.HubDev
+runtime: org.gnome.Platform
+runtime-version: "49"
+sdk: org.gnome.Sdk
+command: hub-dev
+finish-args:
+  - --share=ipc
+  - --share=network
+  - --socket=fallback-x11
+  - --socket=wayland
+  - --device=dri
+  - --filesystem=home
+  - --filesystem=xdg-config/Mr-Aurevo-X:create
+  - --talk-name=org.freedesktop.Flatpak
+  - --talk-name=org.freedesktop.Notifications
+modules:
+  - name: hub-dev
+    buildsystem: simple
+    build-commands:
+      - install -d ${FLATPAK_DEST}/share/hub-dev
+      - find core ui -type d -name __pycache__ -prune -exec rm -rf {} +
+      - cp -a main.py VERSION requirements.txt core ui ui_kit ${FLATPAK_DEST}/share/hub-dev/
+      - install -Dm755 packaging/flatpak/hub-dev.in ${FLATPAK_DEST}/bin/hub-dev
+      - install -Dm644 packaging/flatpak/org.mraurevox.HubDev.desktop
+        ${FLATPAK_DEST}/share/applications/org.mraurevox.HubDev.desktop
+      - install -Dm644 packaging/flatpak/org.mraurevox.HubDev.metainfo.xml
+        ${FLATPAK_DEST}/share/metainfo/org.mraurevox.HubDev.metainfo.xml
+    sources:
+      - type: dir
+        path: ../..

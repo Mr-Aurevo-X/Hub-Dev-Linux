@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Hub Dev
+Comment=Hub Mr-Aurevo-X Linux Platform
+Exec=hub-dev
+Icon=org.mraurevox.HubDev
+Terminal=false
+Categories=Development;Utility;
+StartupNotify=true

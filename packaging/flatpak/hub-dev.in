@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+set -euo pipefail
+export PYTHONPATH="/app/share/hub-dev${PYTHONPATH:+:$PYTHONPATH}"
+cd /app/share/hub-dev
+exec python3 /app/share/hub-dev/main.py "$@"
