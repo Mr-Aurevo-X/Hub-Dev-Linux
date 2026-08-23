@@ -32,12 +32,7 @@
   <releases>
     <release version="1.2.5" date="2026-08-23">
       <description>
-        <p>Icône application : terminal sur carré arrondi.</p>
-      </description>
-    </release>
-    <release version="1.2.5" date="2026-08-23">
-      <description>
-        <p>Arrêter tue le process hôte sur le port (pas seulement le helper Flatpak).</p>
+        <p>Arrêter tue le process hôte sur le port. Icône application mise à jour.</p>
       </description>
     </release>
     <release version="1.2.4" date="2026-08-23">
