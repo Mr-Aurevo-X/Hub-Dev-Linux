@@ -6,5 +6,5 @@ Comment=Hub Mr-Aurevo-X Linux Platform
 Exec=hub-dev
 Icon=org.mraurevox.HubDev
 Terminal=false
-Categories=Development;Utility;
+Categories=Development;
 StartupNotify=true
