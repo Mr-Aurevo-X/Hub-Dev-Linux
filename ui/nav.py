@@ -41,14 +41,17 @@ def nav_groups() -> tuple[NavGroup, ...]:
             (NavPage("loopback", "network-transmit-receive-symbolic", "loopback_title"),),
         ),
         NavGroup(
+            "tools",
+            (
+                NavPage("textdiff", "edit-copy-symbolic", "textdiff_title"),
+                NavPage("snippets", "text-x-generic-symbolic", "snippets_title"),
+            ),
+        ),
+        NavGroup(
             "formats",
             (
-                NavPage(
-                    "json_stub",
-                    "text-x-script-symbolic",
-                    "json_stub_title",
-                    enabled=True,
-                ),
+                NavPage("json_stub", "text-x-script-symbolic", "json_stub_title"),
+                NavPage("env_stub", "text-x-generic-symbolic", "env_stub_title"),
             ),
         ),
     )

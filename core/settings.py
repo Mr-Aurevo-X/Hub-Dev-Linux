@@ -16,7 +16,7 @@ DEFAULTS: dict[str, Any] = {
     "nav_groups_expanded": {},
 }
 
-PAGE_KEYS = ("loopback", "json_stub")
+PAGE_KEYS = ("loopback", "textdiff", "snippets", "json_stub", "env_stub")
 
 
 def load_settings() -> dict[str, Any]:

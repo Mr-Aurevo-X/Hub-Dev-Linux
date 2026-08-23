@@ -10,11 +10,16 @@ gi.require_version("Adw", "1")
 
 from gi.repository import Adw, GLib, Gtk  # noqa: E402
 
-from core import i18n, settings as app_settings, updater
+from core import cross_hub, i18n, settings as app_settings, updater
 from core.loopback.registry import migrate_from_localdock
+from ui import compat
+from ui.helpers import show_toast
 from ui.nav import NavSidebar, page_titles
+from ui.pages.env_page import EnvPage
 from ui.pages.json_page import JsonPage
 from ui.pages.loopback import LoopbackPage
+from ui.pages.snippets_page import SnippetsPage
+from ui.pages.textdiff_page import TextDiffPage
 from ui_kit.dialogs.update import present as present_update_dialog
 from ui_kit.shell import ShellLayout, build_main_layout
 
@@ -27,8 +32,9 @@ class MainWindow(Adw.ApplicationWindow):
         migrate_from_localdock()
         self._settings = app_settings.load_settings()
         i18n.set_language(str(self._settings.get("language") or "fr"))
+        self._toast = Adw.ToastOverlay()
         self._stack = Gtk.Stack(transition_type=Gtk.StackTransitionType.CROSSFADE)
-        self._pages: dict[str, Gtk.Widget] = {}
+        self._pages: dict[str, Any] = {}
         self._nav_sidebar = NavSidebar(
             settings=self._settings,
             on_page_selected=self._on_nav_page_selected,
@@ -53,24 +59,78 @@ class MainWindow(Adw.ApplicationWindow):
             on_settings_save=self._save_prefs,
         )
         self._layout: ShellLayout = layout
-        self.set_content(layout.widget)
+        compat.set_bin_child(self._toast, layout.widget)
+        compat.set_bin_child(self, self._toast)
         self._show_page(last_page, persist=False)
-        GLib.timeout_add(2000, self._maybe_check_updates)
+        self._logged_mapped = False
+        self.connect("map", self._on_window_mapped)
+        if not app_settings.needs_language_prompt(self._settings):
+            GLib.timeout_add(2000, self._maybe_check_updates)
 
-    def _factory(self, key: str) -> Gtk.Widget:
+    def _on_window_mapped(self, *_args: object) -> None:
+        if self._logged_mapped:
+            return
+        self._logged_mapped = True
+        if app_settings.needs_language_prompt(self._settings):
+            GLib.idle_add(self._prompt_language)
+        else:
+            GLib.idle_add(self._consume_pending_textdiff)
+
+    def _prompt_language(self) -> bool:
+        if not app_settings.needs_language_prompt(self._settings):
+            return False
+
+        def on_resp(response: str) -> None:
+            if response not in {"fr", "en"}:
+                return
+            self._apply_language(response)
+            GLib.idle_add(self._consume_pending_textdiff)
+            GLib.timeout_add(400, self._maybe_check_updates)
+
+        compat.present_alert(
+            self,
+            i18n.t("welcome_lang"),
+            i18n.t("welcome_lang_body"),
+            [("fr", "Français"), ("en", "English")],
+            suggested="fr",
+            on_response=on_resp,
+        )
+        return False
+
+    def _consume_pending_textdiff(self) -> bool:
+        paths = cross_hub.read_pending_textdiff()
+        if not paths:
+            return False
+        cross_hub.clear_pending_textdiff()
+        page = self._ensure_page("textdiff")
+        receive = getattr(page, "receive_paths", None)
+        if callable(receive):
+            receive(paths)
+        self._show_page("textdiff")
+        show_toast(self._toast, i18n.t("pending_textdiff"), 4)
+        return False
+
+    def _factory(self, key: str) -> Any:
         if key == "loopback":
             return LoopbackPage(self)
+        if key == "textdiff":
+            return TextDiffPage(self, self._toast)
+        if key == "snippets":
+            return SnippetsPage(self, self._toast)
         if key == "json_stub":
             return JsonPage(self)
+        if key == "env_stub":
+            return EnvPage(self)
         raise KeyError(key)
 
-    def _ensure_page(self, key: str) -> Gtk.Widget:
+    def _ensure_page(self, key: str) -> Any:
         page = self._pages.get(key)
         if page is not None:
             return page
         page = self._factory(key)
         self._pages[key] = page
-        self._stack.add_named(page, key)
+        widget = page.widget if hasattr(page, "widget") else page
+        self._stack.add_named(widget, key)
         return page
 
     def _on_nav_page_selected(self, key: str) -> None:
@@ -94,6 +154,7 @@ class MainWindow(Adw.ApplicationWindow):
     def _apply_language(self, lang: str) -> None:
         i18n.set_language(lang)
         self._settings["language"] = lang
+        self._settings["language_chosen"] = True
         app_settings.save_settings(self._settings)
         self._nav_sidebar.relabel()
         current = self._stack.get_visible_child_name() or "loopback"
