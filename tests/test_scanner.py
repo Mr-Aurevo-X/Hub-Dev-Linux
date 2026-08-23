@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from core.loopback import scanner, toolchain
+from core.loopback import hostcmd, scanner
 from core.loopback.registry import AppEntry, Registry
 
 
@@ -131,8 +131,7 @@ def test_scan_finds_flask_and_fastapi(tmp_path) -> None:
 
 
 def test_scan_prefers_node_hub_over_compose(tmp_path, monkeypatch) -> None:
-    monkeypatch.setattr(scanner.shutil, "which", _no_pnpm_which)
-    monkeypatch.setattr(toolchain.shutil, "which", _no_pnpm_which)
+    monkeypatch.setattr(hostcmd, "which", _no_pnpm_which)
     (tmp_path / "pnpm-workspace.yaml").write_text("packages:\n  - 'apps/*'\n", encoding="utf-8")
     (tmp_path / "package.json").write_text(
         json.dumps(
@@ -178,9 +177,9 @@ def test_is_launchable_requires_command_and_port(tmp_path, monkeypatch) -> None:
     from core.loopback.scanner import ProposedApp
 
     app = ProposedApp("demo", str(tmp_path), "pnpm", ["run", "dev"], 5173)
-    monkeypatch.setattr(scanner.shutil, "which", lambda cmd: None)
+    monkeypatch.setattr(scanner.hostcmd, "which", lambda cmd: None)
     assert scanner.is_launchable(app) is False
-    monkeypatch.setattr(scanner.shutil, "which", lambda cmd: f"/usr/bin/{cmd}")
+    monkeypatch.setattr(scanner.hostcmd, "which", lambda cmd: f"/usr/bin/{cmd}")
     assert scanner.is_launchable(app) is True
     no_port = ProposedApp("demo", str(tmp_path), "pnpm", ["run", "dev"], None)
     assert scanner.is_launchable(no_port) is False
@@ -270,8 +269,7 @@ def test_scan_apps_replaces_stale_games_under_root(tmp_path, monkeypatch) -> Non
 
 
 def test_scan_uses_npx_when_scripts_need_pnpm(tmp_path, monkeypatch) -> None:
-    monkeypatch.setattr(scanner.shutil, "which", _no_pnpm_which)
-    monkeypatch.setattr(toolchain.shutil, "which", _no_pnpm_which)
+    monkeypatch.setattr(hostcmd, "which", _no_pnpm_which)
     (tmp_path / "pnpm-workspace.yaml").write_text("packages:\n  - 'apps/*'\n", encoding="utf-8")
     (tmp_path / "package.json").write_text(
         json.dumps(
@@ -299,8 +297,7 @@ def test_scan_uses_npx_when_scripts_need_pnpm(tmp_path, monkeypatch) -> None:
 
 def test_scan_apps_refreshes_existing_outside_roots(tmp_path, monkeypatch) -> None:
     monkeypatch.setattr(Registry, "path", classmethod(lambda cls: tmp_path / "apps.json"))
-    monkeypatch.setattr(scanner.shutil, "which", _no_pnpm_which)
-    monkeypatch.setattr(toolchain.shutil, "which", _no_pnpm_which)
+    monkeypatch.setattr(hostcmd, "which", _no_pnpm_which)
     lounge = tmp_path / "lounge"
     (lounge / "scripts").mkdir(parents=True)
     (lounge / "scripts" / "dev-local.mjs").write_text(
@@ -361,7 +358,7 @@ def test_scan_disk_only_keeps_launchable(tmp_path, monkeypatch) -> None:
     _write_pkg(tmp_path / "ok", {"dev": "vite"}, pnpm=True)
     (tmp_path / "ok" / "vite.config.ts").write_text("export default {}\n", encoding="utf-8")
     _write_pkg(tmp_path / "lint-only", {"lint": "eslint ."})
-    monkeypatch.setattr(scanner.shutil, "which", lambda cmd: f"/usr/bin/{cmd}" if cmd in {"pnpm", "npm"} else None)
+    monkeypatch.setattr(hostcmd, "which", lambda cmd: f"/usr/bin/{cmd}" if cmd in {"pnpm", "npm"} else None)
     hits = scanner.scan_disk(roots=[tmp_path], require_launchable=True)
     names = {item.name for item in hits}
     assert "ok" in names
@@ -372,7 +369,7 @@ def test_scan_disk_only_keeps_launchable(tmp_path, monkeypatch) -> None:
 
 def test_scan_disk_replaces_stale_without_roots(tmp_path, monkeypatch) -> None:
     monkeypatch.setattr(Registry, "path", classmethod(lambda cls: tmp_path / "apps.json"))
-    monkeypatch.setattr(scanner.shutil, "which", lambda cmd: f"/usr/bin/{cmd}" if cmd in {"pnpm", "npm"} else None)
+    monkeypatch.setattr(hostcmd, "which", lambda cmd: f"/usr/bin/{cmd}" if cmd in {"pnpm", "npm"} else None)
     keep = tmp_path / "ok"
     _write_pkg(keep, {"dev": "vite"}, pnpm=True)
     (keep / "vite.config.ts").write_text("export default {}\n", encoding="utf-8")

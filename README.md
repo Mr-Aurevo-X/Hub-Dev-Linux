@@ -7,7 +7,7 @@
 
 ## Français
 
-Loopback intégré (ex-LocalDock), ports locaux. Formats dev (JSON, .env) à venir.
+Lanceur localhost (ex-LocalDock) : scan des disques, tuiles, start/stop, ports. Outils : Diff texte, Snippets, JSON, .env, Lua.
 
 - **GitHub** : `Mr-Aurevo-X/Hub-Dev-Linux` (privé)
 - **Plateforme** : voir [linux-platform](https://github.com/Mr-Aurevo-X/linux-platform)
@@ -25,23 +25,22 @@ Dev local :
 bash LANCER.sh
 ```
 
-
 ### Confidentialité
 
-Local-first, pas de télémétrie. Vérif. GitHub au démarrage (lecture seule, pas de toggle). Pas d'install auto.
+Local-first, pas de télémétrie. Vérif. GitHub au démarrage (lecture seule, pas de toggle). Pas d'install auto. Le Flatpak accède au disque hôte pour scanner et lancer vos serveurs.
 
 ---
 
 ## English
 
-Integrated loopback (ex-LocalDock), local ports. Dev formats (JSON, .env) coming later.
+Localhost launcher (ex-LocalDock): disk scan, tiles, start/stop, ports. Tools: text diff, snippets, JSON, .env, Lua.
 
 - **GitHub**: `Mr-Aurevo-X/Hub-Dev-Linux` (private)
 - **Platform**: see [linux-platform](https://github.com/Mr-Aurevo-X/linux-platform)
 
 ### Privacy
 
-Local-first, no telemetry. GitHub version check at startup (read-only, no toggle). No auto-install.
+Local-first, no telemetry. GitHub version check at startup (read-only, no toggle). No auto-install. The Flatpak uses host disk access to scan and start your servers.
 
 ---
 

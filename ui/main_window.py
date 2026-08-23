@@ -113,7 +113,7 @@ class MainWindow(Adw.ApplicationWindow):
 
     def _factory(self, key: str) -> Any:
         if key == "loopback":
-            return LoopbackPage(self)
+            return LoopbackPage(self, self._toast)
         if key == "textdiff":
             return TextDiffPage(self, self._toast)
         if key == "snippets":

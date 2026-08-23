@@ -20,12 +20,21 @@
   <developer_name>Mr-Aurevo-X</developer_name>
   <url type="homepage">https://github.com/Mr-Aurevo-X/Hub-Dev-Linux</url>
   <launchable type="desktop-id">org.mraurevox.HubDev.desktop</launchable>
+  <icon type="stock">org.mraurevox.HubDev</icon>
+  <categories>
+    <category>Development</category>
+  </categories>
   <provides>
     <id>org.mraurevox.HubDev.desktop</id>
     <binary>hub-dev</binary>
   </provides>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="1.2.0" date="2026-08-23">
+      <description>
+        <p>Prod : Flatpak lance npm/pnpm/docker sur l’hôte, icône, scan sans dossier, Clear scan.</p>
+      </description>
+    </release>
     <release version="1.1.4" date="2026-08-23">
       <description>
         <p>Scanner parcourt tous les disques sans cibler un dossier. Bouton Clear scan pour vider les tuiles.</p>

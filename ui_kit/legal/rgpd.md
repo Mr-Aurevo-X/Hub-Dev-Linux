@@ -11,7 +11,9 @@ Aucune. Pas de télémétrie, pas de compte, pas de tracker. Mr-Aurevo-X ne reç
 
 Préférences et caches : `~/.config/Mr-Aurevo-X/hubs/dev/`
 
-Vous pouvez supprimer ce dossier à tout moment.
+Le Flatpak lit les projets sur le disque hôte et y démarre des processus locaux. Aucune de ces données n'est transmise à Mr-Aurevo-X.
+
+Vous pouvez supprimer le dossier de config à tout moment.
 
 ## Réseau
 

@@ -20,6 +20,8 @@ Le logiciel est livré autonome. L'éditeur n'a aucune obligation de versions fu
 
 Logiciel fourni **en l'état**. Vous assumez les actions système que vous déclenchez (processus, réseau, fichiers). Les serveurs de développement que vous ouvrez peuvent sortir du poste.
 
+Le bundle Flatpak accède au disque hôte et lance npm/pnpm/docker **sur la machine** (`flatpak-spawn --host`) pour scanner et démarrer vos serveurs localhost. Rien n'est envoyé à l'éditeur.
+
 ## 5. Soutien facultatif
 
 Liens Discord, Revolut et PayPal : volontaires. Un don n'est pas un prix de licence et n'achète ni support ni mises à jour.

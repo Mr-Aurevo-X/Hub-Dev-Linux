@@ -5,8 +5,9 @@ from __future__ import annotations
 
 import json
 import os
-import shutil
 from pathlib import Path
+
+from core.loopback import hostcmd
 
 
 def extra_bin_dirs() -> list[Path]:
@@ -38,7 +39,7 @@ def extra_bin_dirs() -> list[Path]:
 
 
 def which_pnpm() -> str | None:
-    found = shutil.which("pnpm")
+    found = hostcmd.which("pnpm")
     if found:
         return found
     for directory in extra_bin_dirs():
@@ -72,8 +73,8 @@ def ensure_pnpm_shim(version: str = "9") -> Path | None:
     existing = which_pnpm()
     if existing:
         return Path(existing)
-    npx = shutil.which("npx")
-    corepack = shutil.which("corepack")
+    npx = hostcmd.which("npx")
+    corepack = hostcmd.which("corepack")
     if not npx and not corepack:
         return None
     directory = cache_bin()

@@ -10,9 +10,9 @@ def test_prepare_env_prepends_pnpm_shim_when_missing(tmp_path, monkeypatch) -> N
     monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "cache"))
     monkeypatch.delenv("PNPM_HOME", raising=False)
     monkeypatch.setattr(
-        toolchain.shutil,
+        toolchain.hostcmd,
         "which",
-        lambda cmd, path=None: "/usr/bin/npx" if cmd == "npx" and not path else None,
+        lambda cmd: "/usr/bin/npx" if cmd == "npx" else None,
     )
     monkeypatch.setattr(toolchain, "extra_bin_dirs", lambda: [])
     env = toolchain.prepare_env({"PATH": "/usr/bin"}, cwd=tmp_path)

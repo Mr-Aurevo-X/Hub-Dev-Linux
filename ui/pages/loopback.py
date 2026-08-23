@@ -15,6 +15,7 @@ from gi.repository import Gdk, GLib, Gio, Gtk  # noqa: E402
 from core import i18n
 from core.loopback import history, ports, registry, scanner, spawn
 from ui import compat
+from ui.helpers import show_toast
 
 _CSS = b"""
 .loopback-tile {
@@ -66,9 +67,10 @@ def _ensure_css() -> None:
 
 
 class LoopbackPage(Gtk.Box):
-    def __init__(self, window: Gtk.Window) -> None:
+    def __init__(self, window: Gtk.Window, toast: Gtk.Widget | None = None) -> None:
         super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=8)
         self._window = window
+        self._toast = toast
         self._selected_id: str | None = None
         self._disk_cancel = threading.Event()
         self._disk_thread: threading.Thread | None = None
@@ -532,7 +534,7 @@ class LoopbackPage(Gtk.Box):
         added = reg.scan_apps()
         history.append("scan", str(added))
         if notify:
-            self._info(i18n.t("loopback_scan_done", count=str(added)))
+            self._notify(i18n.t("loopback_scan_done", count=str(added)))
         self._reload_apps()
         self._reload_history()
 
@@ -563,8 +565,7 @@ class LoopbackPage(Gtk.Box):
             self._error(error)
             return False
         history.append("scan-disk", str(added))
-        self._scan_status.set_text(i18n.t("loopback_scan_disk_done", count=str(added)))
-        self._info(i18n.t("loopback_scan_disk_done", count=str(added)))
+        self._notify(i18n.t("loopback_scan_disk_done", count=str(added)))
         self._reload_apps()
         self._reload_history()
         return False
@@ -596,7 +597,7 @@ class LoopbackPage(Gtk.Box):
         dialog.connect("response", lambda d, *_: d.destroy())
         dialog.present()
 
-    def _info(self, message: str) -> None:
-        dialog = Gtk.MessageDialog(transient_for=self._window, message_type=Gtk.MessageType.INFO, text=message)
-        dialog.connect("response", lambda d, *_: d.destroy())
-        dialog.present()
+    def _notify(self, message: str) -> None:
+        self._scan_status.set_text(message)
+        if self._toast is not None:
+            show_toast(self._toast, message, 4)

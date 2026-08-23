@@ -9,7 +9,7 @@ finish-args:
   - --socket=fallback-x11
   - --socket=wayland
   - --device=dri
-  - --filesystem=home
+  - --filesystem=host
   - --filesystem=xdg-config/Mr-Aurevo-X:create
   - --talk-name=org.freedesktop.Flatpak
   - --talk-name=org.freedesktop.Notifications
@@ -25,6 +25,8 @@ modules:
         ${FLATPAK_DEST}/share/applications/org.mraurevox.HubDev.desktop
       - install -Dm644 packaging/flatpak/org.mraurevox.HubDev.metainfo.xml
         ${FLATPAK_DEST}/share/metainfo/org.mraurevox.HubDev.metainfo.xml
+      - install -Dm644 packaging/flatpak/org.mraurevox.HubDev.svg
+        ${FLATPAK_DEST}/share/icons/hicolor/scalable/apps/org.mraurevox.HubDev.svg
     sources:
       - type: dir
         path: ../..

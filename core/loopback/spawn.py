@@ -9,7 +9,7 @@ import subprocess
 import time
 from pathlib import Path
 
-from core.loopback import history, ports, toolchain
+from core.loopback import history, hostcmd, ports, toolchain
 from core.loopback.registry import AppEntry, Registry
 
 _running: dict[str, subprocess.Popen[bytes]] = {}
@@ -47,19 +47,20 @@ def start(entry: AppEntry) -> None:
     if entry.force_loopback:
         env.setdefault("HOST", "127.0.0.1")
         env.setdefault("HOSTNAME", "127.0.0.1")
-    log = Path("/tmp") / f"hub-dev-{entry.id}.log"
+    log = hostcmd.log_path(entry.id)
+    argv = hostcmd.spawn_argv(entry.command, entry.args, cwd=cwd, env=env)
     with log.open("wb") as handle:
         proc = subprocess.Popen(
-            [entry.command, *entry.args],
-            cwd=cwd,
-            env=env,
+            argv,
+            cwd=None if hostcmd.in_flatpak() else cwd,
+            env=None if hostcmd.in_flatpak() else env,
             stdout=handle,
             stderr=subprocess.STDOUT,
             start_new_session=True,
         )
     time.sleep(0.2)
     if proc.poll() is not None:
-        tail = log.read_text(encoding="utf-8", errors="replace")[-400:]
+        tail = hostcmd.useful_log_tail(log.read_text(encoding="utf-8", errors="replace"))
         raise RuntimeError(f"arrêt immédiat: {tail}")
     _running[entry.id] = proc
     history.append("start", entry.name or entry.id)

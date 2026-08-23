@@ -5,12 +5,13 @@ from __future__ import annotations
 
 import os
 import re
-import shutil
 import signal
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+
+from core.loopback import hostcmd
 
 _LINE = re.compile(r"^\s*\w+\s+\w+\s+\w+\s+(\S+):(\d+)\s+\S+:\*\s+users:\(\(\"([^\"]+)\",pid=(\d+)")
 _COMMON_PORTS = (5173, 3000, 4173, 8080, 4321, 8000, 24678, 5000, 4200, 6006, 8501, 7860)
@@ -199,10 +200,10 @@ def can_open(
 
 
 def list_loopback_ports() -> list[PortRow]:
-    if not shutil.which("ss"):
+    if not hostcmd.which("ss"):
         return []
     try:
-        out = subprocess.run(
+        out = hostcmd.run(
             ["ss", "-ltnp"],
             capture_output=True,
             text=True,
@@ -226,4 +227,7 @@ def list_loopback_ports() -> list[PortRow]:
 
 
 def kill_pid(pid: int) -> None:
+    if hostcmd.in_flatpak():
+        hostcmd.run(["kill", "-TERM", str(pid)], check=False, timeout=5)
+        return
     os.kill(pid, signal.SIGTERM)

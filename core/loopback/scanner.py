@@ -6,13 +6,12 @@ from __future__ import annotations
 import json
 import os
 import re
-import shutil
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from core.loopback import toolchain
+from core.loopback import hostcmd, toolchain
 from core.loopback.ports import guess_preferred_port
 
 SKIP_DIRS = {
@@ -171,7 +170,7 @@ def is_launchable(proposal: ProposedApp) -> bool:
     relative = cwd / command
     if relative.is_file() and os.access(relative, os.X_OK):
         return True
-    return shutil.which(command) is not None
+    return hostcmd.which(command) is not None
 
 
 def scan_root(
@@ -322,7 +321,7 @@ def _package_manager(path: Path, data: dict[object, object]) -> str:
         if extra not in order:
             order.append(extra)
     for command in order:
-        if shutil.which(command):
+        if hostcmd.which(command):
             return command
     return preferred
 
@@ -340,13 +339,13 @@ def _node_launch(path: Path, data: dict[object, object], picked: str, scripts: d
         found = toolchain.which_pnpm()
         if found:
             return found, ["run", picked]
-        if shutil.which("corepack"):
+        if hostcmd.which("corepack"):
             return "corepack", ["pnpm", "run", picked]
-        if shutil.which("npx"):
+        if hostcmd.which("npx"):
             return "npx", ["--yes", f"pnpm@{_pnpm_version(data)}", "run", picked]
         return None
     command = _package_manager(path, data)
-    if not shutil.which(command) and not Path(command).is_file():
+    if not hostcmd.which(command) and not Path(command).is_file():
         return None
     return command, ["run", picked]
 
@@ -462,9 +461,9 @@ def _python_cmd(path: Path) -> str:
         candidate = path / rel
         if candidate.is_file() and os.access(candidate, os.X_OK):
             return str(candidate)
-    if shutil.which("python3"):
+    if hostcmd.which("python3"):
         return "python3"
-    if shutil.which("python"):
+    if hostcmd.which("python"):
         return "python"
     return "python3"
 
@@ -521,7 +520,7 @@ def _detect_compose(path: Path) -> ProposedApp | None:
         if match is None:
             continue
         port = int(match.group(1))
-        command = "docker-compose" if shutil.which("docker-compose") and not shutil.which("docker") else "docker"
+        command = "docker-compose" if hostcmd.which("docker-compose") and not hostcmd.which("docker") else "docker"
         args = ["up"] if command == "docker-compose" else ["compose", "up"]
         return ProposedApp(path.name, str(path), command, args, port)
     return None

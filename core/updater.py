@@ -44,18 +44,26 @@ def _fetch_latest() -> dict | None:
             data = json.loads(resp.read().decode("utf-8"))
     except (urllib.error.URLError, json.JSONDecodeError, TimeoutError):
         return None
+    return parse_latest_release(data)
+
+
+def parse_latest_release(data: object) -> dict | None:
     if not isinstance(data, list) or not data:
         return None
     release = data[0]
+    if not isinstance(release, dict):
+        return None
     tag = str(release.get("tag_name") or "").lstrip("vV")
     url = ""
     for asset in release.get("assets") or []:
+        if not isinstance(asset, dict):
+            continue
         if asset.get("name") == ASSET_NAME:
             url = str(asset.get("browser_download_url") or "")
             break
-    if not url:
+    if not tag or not url:
         return None
-    return {"version": tag, "flatpak_url": url, "html_url": release.get("html_url", "")}
+    return {"version": tag, "flatpak_url": url, "html_url": str(release.get("html_url") or "")}
 
 
 def check_for_update(*, raise_on_error: bool = False) -> dict | None:
