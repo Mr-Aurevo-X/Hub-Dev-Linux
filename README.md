@@ -5,7 +5,7 @@
 
 Lanceur localhost (ex-LocalDock) : scan des disques, tuiles, start/stop, ports. Outils : Diff texte, Snippets, JSON, .env, Lua.
 
-**1.2.7** — [releases](https://github.com/Mr-Aurevo-X/Hub-Dev-Linux/releases) · GPL-3.0-or-later · © 2026 Mr-Aurevo-X
+**1.2.8** — [releases](https://github.com/Mr-Aurevo-X/Hub-Dev-Linux/releases) · GPL-3.0-or-later · © 2026 Mr-Aurevo-X
 
 ---
 
@@ -18,10 +18,10 @@ Prérequis : [Flatpak](https://flatpak.org/setup/) + runtime GNOME 49 (installé
 ```bash
 rm -f org.mraurevox.HubDev.flatpak
 wget --no-continue -O org.mraurevox.HubDev.flatpak \
-  https://github.com/Mr-Aurevo-X/Hub-Dev-Linux/releases/download/v1.2.7/org.mraurevox.HubDev.flatpak
+  https://github.com/Mr-Aurevo-X/Hub-Dev-Linux/releases/download/v1.2.8/org.mraurevox.HubDev.flatpak
 flatpak install --user -y --reinstall ./org.mraurevox.HubDev.flatpak
 wget --no-continue -O INSTALLER-RACCOURCI-FLATPAK.sh \
-  https://github.com/Mr-Aurevo-X/Hub-Dev-Linux/releases/download/v1.2.7/INSTALLER-RACCOURCI-FLATPAK.sh
+  https://github.com/Mr-Aurevo-X/Hub-Dev-Linux/releases/download/v1.2.8/INSTALLER-RACCOURCI-FLATPAK.sh
 bash ./INSTALLER-RACCOURCI-FLATPAK.sh
 flatpak run org.mraurevox.HubDev
 ```
@@ -56,10 +56,10 @@ Localhost launcher (ex-LocalDock): disk scan, tiles, start/stop, ports. Tools: t
 ```bash
 rm -f org.mraurevox.HubDev.flatpak
 wget --no-continue -O org.mraurevox.HubDev.flatpak \
-  https://github.com/Mr-Aurevo-X/Hub-Dev-Linux/releases/download/v1.2.7/org.mraurevox.HubDev.flatpak
+  https://github.com/Mr-Aurevo-X/Hub-Dev-Linux/releases/download/v1.2.8/org.mraurevox.HubDev.flatpak
 flatpak install --user -y --reinstall ./org.mraurevox.HubDev.flatpak
 wget --no-continue -O INSTALLER-RACCOURCI-FLATPAK.sh \
-  https://github.com/Mr-Aurevo-X/Hub-Dev-Linux/releases/download/v1.2.7/INSTALLER-RACCOURCI-FLATPAK.sh
+  https://github.com/Mr-Aurevo-X/Hub-Dev-Linux/releases/download/v1.2.8/INSTALLER-RACCOURCI-FLATPAK.sh
 bash ./INSTALLER-RACCOURCI-FLATPAK.sh
 flatpak run org.mraurevox.HubDev
 ```
