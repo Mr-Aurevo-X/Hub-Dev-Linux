@@ -370,18 +370,17 @@ def _has_hub_script(path: Path) -> bool:
     return any(key in scripts for key in _HUB_SCRIPTS)
 
 
-def is_workspace_member_of_hub(path: Path) -> bool:
+def is_covered_by_hub(path: Path) -> bool:
     current = Path(path)
-    for parent in current.parents:
-        if not any((parent / marker).is_file() for marker in _WORKSPACE_MARKERS):
-            continue
-        if _has_hub_script(parent):
-            return True
-    return False
+    return any(_has_hub_script(parent) for parent in current.parents)
+
+
+def is_workspace_member_of_hub(path: Path) -> bool:
+    return is_covered_by_hub(path)
 
 
 def _detect_node(path: Path) -> ProposedApp | None:
-    if is_workspace_member_of_hub(path):
+    if is_covered_by_hub(path):
         return None
     pkg = path / "package.json"
     if not pkg.is_file():

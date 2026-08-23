@@ -138,7 +138,7 @@ class LoopbackPage(Gtk.Box):
         self.append(Gtk.Label(label=i18n.t("loopback_history"), xalign=0))
         self.append(self._history_label)
         self._setup_drop()
-        self._scan_empty_roots()
+        self._reconcile_roots()
         self._reload_apps()
         self._reload_ports()
         self._reload_history()
@@ -356,10 +356,8 @@ class LoopbackPage(Gtk.Box):
             return
         webbrowser.open(f"http://127.0.0.1:{port}")
 
-    def _scan_empty_roots(self) -> None:
-        reg = registry.Registry.load()
-        if scanner.empty_linked_roots(reg.allowed_roots, reg.apps):
-            self._scan(notify=False)
+    def _reconcile_roots(self) -> None:
+        self._scan(notify=False)
 
     def _remove_root(self, path: str) -> None:
         registry.Registry.load().remove_allowed_root(path)

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 from core.loopback import scanner
 from core.loopback.registry import Registry
@@ -24,7 +25,7 @@ def test_scan_finds_dev_local_and_nested_game(tmp_path) -> None:
     hits = scanner.scan_root(tmp_path)
     names = {item.name for item in hits}
     assert tmp_path.name in names
-    assert "battler-x" in names
+    assert "battler-x" not in names
     root = next(item for item in hits if item.cwd == str(tmp_path))
     assert root.command in {"pnpm", "npm"}
     assert root.args == ["run", "dev:local"]
@@ -175,6 +176,56 @@ def test_scan_skips_workspace_games_when_hub_exists(tmp_path) -> None:
     assert tmp_path.name in names
     assert "battler-x" not in names
     assert hits[0].preferred_port == 4180
+
+
+def test_scan_skips_games_when_parent_has_dev_local_without_workspace(tmp_path) -> None:
+    (tmp_path / "scripts").mkdir()
+    (tmp_path / "scripts" / "dev-local.mjs").write_text(
+        "const port = Number(process.env.PORT || 4180)\n",
+        encoding="utf-8",
+    )
+    _write_pkg(tmp_path, {"dev:local": "node scripts/dev-local.mjs"})
+    game = tmp_path / "games" / "battler-x"
+    _write_pkg(game, {"dev": "vite"})
+    (game / "vite.config.ts").write_text("export default {}\n", encoding="utf-8")
+    hits = scanner.scan_root(tmp_path)
+    assert {item.name for item in hits} == {tmp_path.name}
+    assert hits[0].preferred_port == 4180
+
+
+def test_scan_apps_replaces_stale_games_under_root(tmp_path, monkeypatch) -> None:
+    from core.loopback.registry import AppEntry, Registry
+
+    monkeypatch.setattr(Registry, "path", classmethod(lambda cls: tmp_path / "apps.json"))
+    lounge = tmp_path / "lounge"
+    keep_dir = tmp_path / "keep-app"
+    (lounge / "scripts").mkdir(parents=True)
+    (lounge / "scripts" / "dev-local.mjs").write_text(
+        "const port = Number(process.env.PORT || 4180)\n",
+        encoding="utf-8",
+    )
+    _write_pkg(lounge, {"dev:local": "node scripts/dev-local.mjs"})
+    game = lounge / "games" / "battler-x"
+    _write_pkg(game, {"dev": "vite"})
+    (game / "vite.config.ts").write_text("export default {}\n", encoding="utf-8")
+    keep_dir.mkdir()
+    reg = Registry.default_empty()
+    reg.allowed_roots = [str(lounge)]
+    reg.apps = [
+        AppEntry(id="hub", name="old-hub", cwd=str(lounge), command="npm", args=["run", "dev"], preferred_port=5173),
+        AppEntry(id="battler-x", name="battler-x", cwd=str(game), command="npm", args=["run", "dev"], preferred_port=5173),
+        AppEntry(id="keep", name="keep", cwd=str(keep_dir), command="npm", args=["run", "dev"]),
+    ]
+    reg.save()
+    loaded = Registry.load()
+    loaded.scan_apps()
+    apps = Registry.load().apps
+    names = {app.name for app in apps}
+    assert "battler-x" not in names
+    hub = next(app for app in apps if Path(app.cwd).resolve() == lounge.resolve())
+    assert hub.args == ["run", "dev:local"]
+    assert hub.preferred_port == 4180
+    assert "keep" in names
 
 
 def test_scan_disk_only_keeps_launchable(tmp_path, monkeypatch) -> None:

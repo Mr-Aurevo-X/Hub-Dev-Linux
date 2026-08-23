@@ -75,6 +75,8 @@ class Registry:
             )
         loaded = cls(version=int(data.get("version", REGISTRY_VERSION)), allowed_roots=roots, apps=apps)
         loaded.prune_roots()
+        if loaded.prune_covered_apps():
+            loaded.save()
         return loaded
 
     @classmethod
@@ -245,7 +247,7 @@ class Registry:
         if not roots:
             return 0
         proposals = [item for root in roots for item in scanner.scan_root(root) if scanner.is_launchable(item)]
-        return self._ingest(proposals)
+        return self._ingest(proposals, replace_under=roots)
 
     def scan_disk(self, should_stop: scanner.StopCheck | None = None) -> int:
         return self._ingest(scanner.scan_disk(require_launchable=True, should_stop=should_stop))
@@ -256,13 +258,40 @@ class Registry:
         except OSError:
             return raw
 
-    def _ingest(self, proposals: Iterable[scanner.ProposedApp]) -> int:
+    def _under_roots(self, cwd: str, roots: list[Path]) -> bool:
+        try:
+            current = Path(cwd).expanduser().resolve()
+        except OSError:
+            return False
+        return any(current == root.resolve() or root.resolve() in current.parents for root in roots)
+
+    def prune_covered_apps(self) -> bool:
+        kept: list[AppEntry] = []
+        seen: set[str] = set()
+        changed = False
+        for app in self.apps:
+            key = self._cwd_key(app.cwd)
+            if scanner.is_covered_by_hub(Path(app.cwd)):
+                changed = True
+                continue
+            if key in seen:
+                changed = True
+                continue
+            seen.add(key)
+            kept.append(app)
+        if changed:
+            self.apps = kept
+        return changed
+
+    def _ingest(self, proposals: Iterable[scanner.ProposedApp], replace_under: list[Path] | None = None) -> int:
         wanted = {self._cwd_key(item.cwd): item for item in proposals}
         kept: list[AppEntry] = []
         seen: set[str] = set()
         for app in self.apps:
             key = self._cwd_key(app.cwd)
-            if scanner.is_workspace_member_of_hub(Path(app.cwd)):
+            if scanner.is_covered_by_hub(Path(app.cwd)):
+                continue
+            if replace_under and self._under_roots(app.cwd, replace_under) and key not in wanted:
                 continue
             if key in seen:
                 continue
@@ -284,7 +313,6 @@ class Registry:
                 continue
             try:
                 add_app_from_proposal(proposal, self)
-                self.apps = type(self).load().apps
                 added += 1
             except ValueError:
                 continue
