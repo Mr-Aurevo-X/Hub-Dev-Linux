@@ -53,3 +53,16 @@ def test_update_app_and_profile(tmp_path, monkeypatch):
     assert loaded.apps[0].profile == "prod"
     assert loaded.apps[0].preferred_port == 8080
     assert reg.update_app("missing", name="Nope") is False
+
+
+def test_clear_scan_wipes_apps_and_roots(tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr(Registry, "path", classmethod(lambda cls: tmp_path / "apps.json"))
+    reg = Registry.default_empty()
+    reg.allowed_roots = [str(tmp_path)]
+    reg.apps = [AppEntry(id="demo", name="Demo", cwd=str(tmp_path), command="npm", args=["run", "dev"])]
+    reg.save()
+    count = Registry.load().clear_scan()
+    loaded = Registry.load()
+    assert count == 1
+    assert loaded.apps == []
+    assert loaded.allowed_roots == []

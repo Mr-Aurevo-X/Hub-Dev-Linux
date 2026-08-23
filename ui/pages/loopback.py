@@ -79,18 +79,18 @@ class LoopbackPage(Gtk.Box):
         registry.migrate_from_localdock()
         toolbar = Gtk.Box(spacing=8)
         add_root_btn = Gtk.Button(label=i18n.t("loopback_add_root"))
-        scan_btn = Gtk.Button(label=i18n.t("loopback_scan"))
-        self._disk_btn = Gtk.Button(label=i18n.t("loopback_scan_disk"))
+        self._scan_btn = Gtk.Button(label=i18n.t("loopback_scan"))
+        clear_btn = Gtk.Button(label=i18n.t("loopback_clear_scan"))
         refresh_btn = Gtk.Button(label=i18n.t("loopback_refresh_ports"))
         form_btn = Gtk.Button(label=i18n.t("loopback_add_edit"))
         add_root_btn.connect("clicked", lambda *_: self._pick_root())
-        scan_btn.connect("clicked", lambda *_: self._scan(notify=True))
-        self._disk_btn.connect("clicked", lambda *_: self._toggle_disk_scan())
+        self._scan_btn.connect("clicked", lambda *_: self._toggle_disk_scan())
+        clear_btn.connect("clicked", lambda *_: self._clear_scan())
         refresh_btn.connect("clicked", lambda *_: self._reload_ports())
         form_btn.connect("clicked", lambda *_: self._open_app_form())
+        toolbar.append(self._scan_btn)
+        toolbar.append(clear_btn)
         toolbar.append(add_root_btn)
-        toolbar.append(scan_btn)
-        toolbar.append(self._disk_btn)
         toolbar.append(refresh_btn)
         toolbar.append(form_btn)
 
@@ -357,7 +357,18 @@ class LoopbackPage(Gtk.Box):
         webbrowser.open(f"http://127.0.0.1:{port}")
 
     def _reconcile_roots(self) -> None:
-        self._scan(notify=False)
+        reg = registry.Registry.load()
+        if reg.prune_covered_apps():
+            reg.save()
+
+    def _clear_scan(self) -> None:
+        if self._disk_thread is not None and self._disk_thread.is_alive():
+            self._disk_cancel.set()
+        count = registry.Registry.load().clear_scan()
+        self._scan_btn.set_label(i18n.t("loopback_scan"))
+        self._scan_status.set_text(i18n.t("loopback_scan_cleared", count=str(count)))
+        self._reload_apps()
+        self._reload_history()
 
     def _remove_root(self, path: str) -> None:
         registry.Registry.load().remove_allowed_root(path)
@@ -530,7 +541,7 @@ class LoopbackPage(Gtk.Box):
             self._disk_cancel.set()
             return
         self._disk_cancel.clear()
-        self._disk_btn.set_label(i18n.t("loopback_cancel_scan"))
+        self._scan_btn.set_label(i18n.t("loopback_cancel_scan"))
         self._scan_status.set_text(i18n.t("loopback_scan_disk_running"))
 
         def work() -> None:
@@ -546,7 +557,7 @@ class LoopbackPage(Gtk.Box):
 
     def _on_disk_scan_done(self, added: int, error: str | None) -> bool:
         self._disk_thread = None
-        self._disk_btn.set_label(i18n.t("loopback_scan_disk"))
+        self._scan_btn.set_label(i18n.t("loopback_scan"))
         if error:
             self._scan_status.set_text("")
             self._error(error)

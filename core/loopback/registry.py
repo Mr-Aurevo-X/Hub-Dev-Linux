@@ -81,8 +81,7 @@ class Registry:
 
     @classmethod
     def default_empty(cls) -> Registry:
-        home = str(Path.home())
-        return cls(allowed_roots=[home], apps=[])
+        return cls(allowed_roots=[], apps=[])
 
     def save(self) -> None:
         path = self.path()
@@ -258,7 +257,18 @@ class Registry:
         return self._ingest(proposals, replace_under=roots)
 
     def scan_disk(self, should_stop: scanner.StopCheck | None = None) -> int:
-        return self._ingest(scanner.scan_disk(require_launchable=True, should_stop=should_stop))
+        return self._ingest(
+            scanner.scan_disk(require_launchable=True, should_stop=should_stop),
+            replace_all=True,
+        )
+
+    def clear_scan(self) -> int:
+        count = len(self.apps)
+        self.apps = []
+        self.allowed_roots = []
+        self.save()
+        history.append("clear", str(count))
+        return count
 
     def _cwd_key(self, raw: str) -> str:
         try:
@@ -291,13 +301,20 @@ class Registry:
             self.apps = kept
         return changed
 
-    def _ingest(self, proposals: Iterable[scanner.ProposedApp], replace_under: list[Path] | None = None) -> int:
+    def _ingest(
+        self,
+        proposals: Iterable[scanner.ProposedApp],
+        replace_under: list[Path] | None = None,
+        replace_all: bool = False,
+    ) -> int:
         wanted = {self._cwd_key(item.cwd): item for item in proposals}
         kept: list[AppEntry] = []
         seen: set[str] = set()
         for app in self.apps:
             key = self._cwd_key(app.cwd)
             if scanner.is_covered_by_hub(Path(app.cwd)):
+                continue
+            if replace_all and key not in wanted:
                 continue
             if replace_under and self._under_roots(app.cwd, replace_under) and key not in wanted:
                 continue

@@ -368,3 +368,33 @@ def test_scan_disk_only_keeps_launchable(tmp_path, monkeypatch) -> None:
     assert "lint-only" not in names
     assert all(item.preferred_port for item in hits)
     assert all(item.command and item.args for item in hits)
+
+
+def test_scan_disk_replaces_stale_without_roots(tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr(Registry, "path", classmethod(lambda cls: tmp_path / "apps.json"))
+    monkeypatch.setattr(scanner.shutil, "which", lambda cmd: f"/usr/bin/{cmd}" if cmd in {"pnpm", "npm"} else None)
+    keep = tmp_path / "ok"
+    _write_pkg(keep, {"dev": "vite"}, pnpm=True)
+    (keep / "vite.config.ts").write_text("export default {}\n", encoding="utf-8")
+    stale = tmp_path / "gone"
+    stale.mkdir()
+    reg = Registry.default_empty()
+    reg.allowed_roots = []
+    reg.apps = [
+        AppEntry(
+            id="stale",
+            name="stale",
+            cwd=str(stale),
+            command="npm",
+            args=["run", "dev"],
+            preferred_port=5173,
+        )
+    ]
+    reg.save()
+    monkeypatch.setattr(scanner, "disk_scan_roots", lambda: [tmp_path])
+    Registry.load().scan_disk()
+    apps = Registry.load().apps
+    names = {app.name for app in apps}
+    assert "stale" not in names
+    assert "ok" in names
+    assert Registry.load().allowed_roots == []
