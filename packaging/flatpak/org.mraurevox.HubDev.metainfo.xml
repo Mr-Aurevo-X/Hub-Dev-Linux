@@ -26,6 +26,11 @@
   </provides>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="1.1.3" date="2026-08-23">
+      <description>
+        <p>Sentinel : ne plus lancer npm si le script appelle pnpm ; fournir pnpm via npx/PATH ; rafraîchir les apps hors racine.</p>
+      </description>
+    </release>
     <release version="1.1.2" date="2026-08-23">
       <description>
         <p>Scan : remplace les tuiles sous la racine, retire les enfants d’un hub dev:local, réconcilie au démarrage.</p>

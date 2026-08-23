@@ -9,7 +9,7 @@ import subprocess
 import time
 from pathlib import Path
 
-from core.loopback import history, ports
+from core.loopback import history, ports, toolchain
 from core.loopback.registry import AppEntry, Registry
 
 _running: dict[str, subprocess.Popen[bytes]] = {}
@@ -43,7 +43,7 @@ def start(entry: AppEntry) -> None:
     cwd = Path(entry.cwd).expanduser()
     if not cwd.is_dir():
         raise FileNotFoundError(str(cwd))
-    env = os.environ.copy()
+    env = toolchain.prepare_env(os.environ.copy(), cwd=cwd)
     if entry.force_loopback:
         env.setdefault("HOST", "127.0.0.1")
         env.setdefault("HOSTNAME", "127.0.0.1")

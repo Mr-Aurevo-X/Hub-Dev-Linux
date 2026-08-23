@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from core.loopback import toolchain
 from core.loopback.ports import guess_preferred_port
 
 SKIP_DIRS = {
@@ -258,12 +259,11 @@ def scan_disk(
 
 
 def detect_in_dir(path: Path) -> list[ProposedApp]:
-    found: list[ProposedApp] = []
     for detector in (_detect_node, _detect_python, _detect_php, _detect_compose, _detect_rails, _detect_make):
         proposal = detector(path)
         if proposal is not None:
-            found.append(proposal)
-    return found
+            return [proposal]
+    return []
 
 
 def _scan_dir(
@@ -289,6 +289,8 @@ def _scan_dir(
             return
         try:
             if child.is_symlink() or not child.is_dir() or child.name in SKIP_DIRS:
+                continue
+            if child.name == "fixtures" and path.name in {"test", "tests"}:
                 continue
         except OSError:
             continue
@@ -323,6 +325,50 @@ def _package_manager(path: Path, data: dict[object, object]) -> str:
         if shutil.which(command):
             return command
     return preferred
+
+
+def _pnpm_version(data: dict[object, object]) -> str:
+    manager = str(data.get("packageManager") or "")
+    if manager.startswith("pnpm@"):
+        return manager.split("@", 1)[1].split("+")[0]
+    return "9"
+
+
+def _node_launch(path: Path, data: dict[object, object], picked: str, scripts: dict[str, str]) -> tuple[str, list[str]] | None:
+    body = scripts.get(picked, "")
+    if "pnpm" in body:
+        found = toolchain.which_pnpm()
+        if found:
+            return found, ["run", picked]
+        if shutil.which("corepack"):
+            return "corepack", ["pnpm", "run", picked]
+        if shutil.which("npx"):
+            return "npx", ["--yes", f"pnpm@{_pnpm_version(data)}", "run", picked]
+        return None
+    command = _package_manager(path, data)
+    if not shutil.which(command) and not Path(command).is_file():
+        return None
+    return command, ["run", picked]
+
+
+def _port_from_workspace_apps(root: Path) -> int | None:
+    for rel in ("apps", "packages"):
+        base = root / rel
+        if not base.is_dir():
+            continue
+        try:
+            children = list(base.iterdir())
+        except OSError:
+            continue
+        for child in children:
+            scripts = _package_scripts(child)
+            if not scripts:
+                continue
+            picked = _pick_script(scripts)
+            port = guess_preferred_port(child, scripts, picked=picked)
+            if port:
+                return port
+    return None
 
 
 def _script_is_server(name: str, body: str) -> bool:
@@ -367,7 +413,12 @@ def _package_scripts(path: Path) -> dict[str, str]:
 
 def _has_hub_script(path: Path) -> bool:
     scripts = _package_scripts(path)
-    return any(key in scripts for key in _HUB_SCRIPTS)
+    if any(key in scripts for key in _HUB_SCRIPTS):
+        return True
+    if not (path / "pnpm-workspace.yaml").is_file() and not (path / "pnpm-workspace.yml").is_file():
+        return False
+    body = scripts.get("dev", "")
+    return any(token in body for token in ("pnpm --filter", "pnpm -r", "docker:up", "docker compose"))
 
 
 def is_covered_by_hub(path: Path) -> bool:
@@ -398,13 +449,12 @@ def _detect_node(path: Path) -> ProposedApp | None:
     if picked is None:
         return None
     scripts_text = {str(name): str(value) for name, value in scripts.items()}
-    return ProposedApp(
-        path.name,
-        str(path),
-        _package_manager(path, data),
-        ["run", picked],
-        guess_preferred_port(path, scripts_text, picked=picked),
-    )
+    launch = _node_launch(path, data, picked, scripts_text)
+    if launch is None:
+        return None
+    command, args = launch
+    port = guess_preferred_port(path, scripts_text, picked=picked) or _port_from_workspace_apps(path)
+    return ProposedApp(path.name, str(path), command, args, port)
 
 
 def _python_cmd(path: Path) -> str:

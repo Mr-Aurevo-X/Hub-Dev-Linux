@@ -244,9 +244,17 @@ class Registry:
 
     def scan_apps(self) -> int:
         roots = [Path(raw) for raw in self.allowed_roots if Path(raw).is_dir()]
-        if not roots:
-            return 0
         proposals = [item for root in roots for item in scanner.scan_root(root) if scanner.is_launchable(item)]
+        seen = {self._cwd_key(item.cwd) for item in proposals}
+        for app in self.apps:
+            key = self._cwd_key(app.cwd)
+            if key in seen:
+                continue
+            cwd = Path(app.cwd)
+            if not cwd.is_dir() or (roots and self._under_roots(app.cwd, roots)):
+                continue
+            seen.add(key)
+            proposals.extend(item for item in scanner.detect_in_dir(cwd) if scanner.is_launchable(item))
         return self._ingest(proposals, replace_under=roots)
 
     def scan_disk(self, should_stop: scanner.StopCheck | None = None) -> int:

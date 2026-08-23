@@ -4,8 +4,16 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from core.loopback import scanner
-from core.loopback.registry import Registry
+from core.loopback import scanner, toolchain
+from core.loopback.registry import AppEntry, Registry
+
+
+def _no_pnpm_which(cmd: str, path: str | None = None) -> str | None:
+    if path:
+        return None
+    if cmd in {"npm", "npx"}:
+        return f"/usr/bin/{cmd}"
+    return None
 
 
 def _write_pkg(path, scripts: dict[str, str], *, pnpm: bool = False) -> None:
@@ -29,6 +37,13 @@ def test_scan_finds_dev_local_and_nested_game(tmp_path) -> None:
     root = next(item for item in hits if item.cwd == str(tmp_path))
     assert root.command in {"pnpm", "npm"}
     assert root.args == ["run", "dev:local"]
+
+
+def test_scan_skips_test_fixtures(tmp_path) -> None:
+    fixture = tmp_path / "tests" / "fixtures" / "vite-app"
+    _write_pkg(fixture, {"dev": "vite --port 3001"})
+    (fixture / "vite.config.ts").write_text("export default {}\n", encoding="utf-8")
+    assert scanner.scan_root(tmp_path) == []
 
 
 def test_scan_skips_node_modules(tmp_path) -> None:
@@ -113,6 +128,32 @@ def test_scan_finds_flask_and_fastapi(tmp_path) -> None:
     assert "flask" in " ".join(hits["flask-app"].args).lower() or hits["flask-app"].args[0] == "-m"
     assert hits["api"].preferred_port == 8000
     assert "uvicorn" in " ".join([hits["api"].command, *hits["api"].args])
+
+
+def test_scan_prefers_node_hub_over_compose(tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr(scanner.shutil, "which", _no_pnpm_which)
+    monkeypatch.setattr(toolchain.shutil, "which", _no_pnpm_which)
+    (tmp_path / "pnpm-workspace.yaml").write_text("packages:\n  - 'apps/*'\n", encoding="utf-8")
+    (tmp_path / "package.json").write_text(
+        json.dumps(
+            {
+                "name": "mr-x-sentinel",
+                "packageManager": "pnpm@9.15.0",
+                "scripts": {"dev": "pnpm run docker:up && pnpm --filter @sentinel/dashboard dev"},
+            }
+        ),
+        encoding="utf-8",
+    )
+    (tmp_path / "compose.yaml").write_text(
+        "services:\n  db:\n    ports:\n      - '127.0.0.1:5433:5432'\n",
+        encoding="utf-8",
+    )
+    dash = tmp_path / "apps" / "dashboard"
+    _write_pkg(dash, {"dev": "next dev -p 3000"})
+    hits = scanner.scan_root(tmp_path)
+    assert len(hits) == 1
+    assert hits[0].command == "npx"
+    assert hits[0].preferred_port == 3000
 
 
 def test_scan_finds_artisan_and_compose(tmp_path) -> None:
@@ -226,6 +267,94 @@ def test_scan_apps_replaces_stale_games_under_root(tmp_path, monkeypatch) -> Non
     assert hub.args == ["run", "dev:local"]
     assert hub.preferred_port == 4180
     assert "keep" in names
+
+
+def test_scan_uses_npx_when_scripts_need_pnpm(tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr(scanner.shutil, "which", _no_pnpm_which)
+    monkeypatch.setattr(toolchain.shutil, "which", _no_pnpm_which)
+    (tmp_path / "pnpm-workspace.yaml").write_text("packages:\n  - 'apps/*'\n", encoding="utf-8")
+    (tmp_path / "package.json").write_text(
+        json.dumps(
+            {
+                "name": "mr-x-sentinel",
+                "packageManager": "pnpm@9.15.0",
+                "scripts": {
+                    "dev": 'pnpm run docker:up && pnpm --filter @sentinel/dashboard dev',
+                    "docker:up": "docker compose up -d",
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    dash = tmp_path / "apps" / "dashboard"
+    _write_pkg(dash, {"dev": "next dev -p 3000"})
+    hits = scanner.scan_root(tmp_path)
+    assert len(hits) == 1
+    assert hits[0].command == "npx"
+    assert hits[0].args[:3] == ["--yes", "pnpm@9.15.0", "run"]
+    assert hits[0].args[-1] == "dev"
+    assert hits[0].preferred_port == 3000
+    assert "dashboard" not in {item.name for item in hits}
+
+
+def test_scan_apps_refreshes_existing_outside_roots(tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr(Registry, "path", classmethod(lambda cls: tmp_path / "apps.json"))
+    monkeypatch.setattr(scanner.shutil, "which", _no_pnpm_which)
+    monkeypatch.setattr(toolchain.shutil, "which", _no_pnpm_which)
+    lounge = tmp_path / "lounge"
+    (lounge / "scripts").mkdir(parents=True)
+    (lounge / "scripts" / "dev-local.mjs").write_text(
+        "const port = Number(process.env.PORT || 4180)\n",
+        encoding="utf-8",
+    )
+    _write_pkg(lounge, {"dev:local": "node scripts/dev-local.mjs"})
+    sentinel = tmp_path / "Discord Bot" / "Sentinel"
+    dash = sentinel / "apps" / "dashboard"
+    sentinel.mkdir(parents=True)
+    (sentinel / "pnpm-workspace.yaml").write_text("packages:\n  - 'apps/*'\n", encoding="utf-8")
+    (sentinel / "package.json").write_text(
+        json.dumps(
+            {
+                "name": "mr-x-sentinel",
+                "packageManager": "pnpm@9.15.0",
+                "scripts": {
+                    "dev": "pnpm run docker:up && pnpm --filter @sentinel/dashboard dev",
+                    "docker:up": "docker compose up -d",
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    _write_pkg(dash, {"dev": "next dev -p 3000"})
+    reg = Registry.default_empty()
+    reg.allowed_roots = [str(lounge)]
+    reg.apps = [
+        AppEntry(
+            id="sentinel",
+            name="Sentinel",
+            cwd=str(sentinel),
+            command="npm",
+            args=["run", "dev"],
+            preferred_port=None,
+        ),
+        AppEntry(
+            id="dashboard",
+            name="dashboard",
+            cwd=str(dash),
+            command="npm",
+            args=["run", "dev"],
+            preferred_port=3000,
+        ),
+    ]
+    reg.save()
+    Registry.load().scan_apps()
+    apps = Registry.load().apps
+    names = {app.name for app in apps}
+    assert "dashboard" not in names
+    sent = next(app for app in apps if Path(app.cwd).resolve() == sentinel.resolve())
+    assert sent.command == "npx"
+    assert sent.args[:3] == ["--yes", "pnpm@9.15.0", "run"]
+    assert sent.preferred_port == 3000
 
 
 def test_scan_disk_only_keeps_launchable(tmp_path, monkeypatch) -> None:
