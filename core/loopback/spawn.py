@@ -25,6 +25,13 @@ def is_running(app_id: str) -> bool:
     return True
 
 
+def running_pid(app_id: str) -> int | None:
+    if not is_running(app_id):
+        return None
+    proc = _running.get(app_id)
+    return None if proc is None else proc.pid
+
+
 def start(entry: AppEntry) -> None:
     reg = Registry.load()
     reg.validate_command(entry.command)

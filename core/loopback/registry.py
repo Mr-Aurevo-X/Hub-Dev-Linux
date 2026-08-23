@@ -72,7 +72,9 @@ class Registry:
                     profile=_coerce_profile(raw.get("profile")),
                 )
             )
-        return cls(version=int(data.get("version", REGISTRY_VERSION)), allowed_roots=roots, apps=apps)
+        loaded = cls(version=int(data.get("version", REGISTRY_VERSION)), allowed_roots=roots, apps=apps)
+        loaded.prune_roots()
+        return loaded
 
     @classmethod
     def default_empty(cls) -> Registry:
@@ -175,11 +177,84 @@ class Registry:
             return True
         return False
 
-    def add_allowed_root(self, path: str) -> None:
-        resolved = str(Path(path).expanduser().resolve())
-        if resolved not in self.allowed_roots:
-            self.allowed_roots.append(resolved)
+    def add_allowed_root(self, path: str) -> bool:
+        try:
+            resolved = str(scanner.normalize_root(path))
+        except (OSError, ValueError):
+            return False
+        existing = []
+        for root in self.allowed_roots:
+            try:
+                existing.append(str(Path(root).expanduser().resolve()))
+            except OSError:
+                existing.append(root)
+        if resolved in existing:
+            return False
+        self.allowed_roots = [r for r in self.allowed_roots if Path(r).name not in scanner.SKIP_DIRS]
+        self.allowed_roots.append(resolved)
+        self.save()
+        return True
+
+    def prune_roots(self) -> bool:
+        kept: list[str] = []
+        seen: set[str] = set()
+        changed = False
+        for root in self.allowed_roots:
+            raw = Path(root)
+            if raw.name in scanner.SKIP_DIRS:
+                changed = True
+                continue
+            try:
+                key = str(raw.expanduser().resolve()) if raw.exists() else str(raw)
+            except OSError:
+                key = str(raw)
+            if key in seen:
+                changed = True
+                continue
+            seen.add(key)
+            kept.append(key)
+        if kept != self.allowed_roots:
+            self.allowed_roots = kept
             self.save()
+            return True
+        return changed
+
+    def remove_allowed_root(self, path: str) -> bool:
+        try:
+            target = str(Path(path).expanduser().resolve())
+        except OSError:
+            target = path
+        before = len(self.allowed_roots)
+        kept: list[str] = []
+        for root in self.allowed_roots:
+            try:
+                key = str(Path(root).expanduser().resolve())
+            except OSError:
+                key = root
+            if key != target and root != path:
+                kept.append(root)
+        if len(kept) == before:
+            return False
+        self.allowed_roots = kept
+        self.save()
+        return True
+
+    def scan_apps(self) -> int:
+        added = 0
+        roots = [Path(raw) for raw in self.allowed_roots if Path(raw).is_dir()]
+        if not roots:
+            return 0
+        for root in roots:
+            for proposal in scanner.scan_root(root):
+                if any(app.cwd == proposal.cwd and app.command == proposal.command for app in self.apps):
+                    continue
+                try:
+                    add_app_from_proposal(proposal, self)
+                    self.apps = type(self).load().apps
+                    added += 1
+                except ValueError:
+                    continue
+        return added
 
     def remove_app(self, app_id: str) -> bool:
         before = len(self.apps)
