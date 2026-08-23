@@ -9,6 +9,7 @@ import subprocess
 import time
 from pathlib import Path
 
+from core.loopback import history
 from core.loopback.registry import AppEntry, Registry
 
 _running: dict[str, subprocess.Popen[bytes]] = {}
@@ -51,6 +52,7 @@ def start(entry: AppEntry) -> None:
         tail = log.read_text(encoding="utf-8", errors="replace")[-400:]
         raise RuntimeError(f"arrêt immédiat: {tail}")
     _running[entry.id] = proc
+    history.append("start", entry.name or entry.id)
 
 
 def stop(app_id: str) -> None:
@@ -63,3 +65,4 @@ def stop(app_id: str) -> None:
             proc.wait(timeout=5)
         except subprocess.TimeoutExpired:
             os.killpg(proc.pid, signal.SIGKILL)
+    history.append("stop", app_id)

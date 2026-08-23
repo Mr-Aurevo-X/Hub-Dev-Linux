@@ -50,8 +50,9 @@ def nav_groups() -> tuple[NavGroup, ...]:
         NavGroup(
             "formats",
             (
-                NavPage("json_stub", "text-x-script-symbolic", "json_stub_title"),
-                NavPage("env_stub", "text-x-generic-symbolic", "env_stub_title"),
+                NavPage("json", "text-x-script-symbolic", "json_title"),
+                NavPage("env", "text-x-generic-symbolic", "env_title"),
+                NavPage("lua", "text-x-script-symbolic", "lua_title"),
             ),
         ),
     )

@@ -16,7 +16,8 @@ DEFAULTS: dict[str, Any] = {
     "nav_groups_expanded": {},
 }
 
-PAGE_KEYS = ("loopback", "textdiff", "snippets", "json_stub", "env_stub")
+PAGE_KEYS = ("loopback", "textdiff", "snippets", "json", "env", "lua")
+PAGE_ALIASES = {"json_stub": "json", "env_stub": "env"}
 
 
 def load_settings() -> dict[str, Any]:
@@ -41,6 +42,7 @@ def save_settings(settings: dict[str, Any]) -> None:
 
 def coerce_page(value: object) -> str:
     key = str(value or "loopback").strip()
+    key = PAGE_ALIASES.get(key, key)
     return key if key in PAGE_KEYS else "loopback"
 
 

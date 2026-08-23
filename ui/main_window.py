@@ -18,6 +18,7 @@ from ui.nav import NavSidebar, page_titles
 from ui.pages.env_page import EnvPage
 from ui.pages.json_page import JsonPage
 from ui.pages.loopback import LoopbackPage
+from ui.pages.lua_page import LuaPage
 from ui.pages.snippets_page import SnippetsPage
 from ui.pages.textdiff_page import TextDiffPage
 from ui_kit.dialogs.update import present as present_update_dialog
@@ -117,10 +118,12 @@ class MainWindow(Adw.ApplicationWindow):
             return TextDiffPage(self, self._toast)
         if key == "snippets":
             return SnippetsPage(self, self._toast)
-        if key == "json_stub":
+        if key == "json":
             return JsonPage(self)
-        if key == "env_stub":
+        if key == "env":
             return EnvPage(self)
+        if key == "lua":
+            return LuaPage(self)
         raise KeyError(key)
 
     def _ensure_page(self, key: str) -> Any:

@@ -8,11 +8,23 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from core.loopback import scanner
+from core.loopback import history, scanner
 from core.paths import config_dir
 
 REGISTRY_VERSION = 1
+PROFILES = ("dev", "preview", "prod")
 _ALLOWED_CMD = re.compile(r"^[a-zA-Z0-9_./+-]+$")
+_UNSET = object()
+
+
+def _coerce_profile(value: object) -> str:
+    key = str(value or "dev").strip().lower()
+    return key if key in PROFILES else "dev"
+
+
+def _slug_id(name: str) -> str:
+    app_id = name.lower().replace(" ", "-").replace("_", "-")
+    return app_id or "app"
 
 
 @dataclass
@@ -25,6 +37,7 @@ class AppEntry:
     preferred_port: int | None = None
     force_loopback: bool = True
     enabled: bool = True
+    profile: str = "dev"
 
 
 @dataclass
@@ -56,6 +69,7 @@ class Registry:
                     preferred_port=raw.get("preferred_port"),
                     force_loopback=bool(raw.get("force_loopback", True)),
                     enabled=bool(raw.get("enabled", True)),
+                    profile=_coerce_profile(raw.get("profile")),
                 )
             )
         return cls(version=int(data.get("version", REGISTRY_VERSION)), allowed_roots=roots, apps=apps)
@@ -81,6 +95,7 @@ class Registry:
                     "preferred_port": a.preferred_port,
                     "force_loopback": a.force_loopback,
                     "enabled": a.enabled,
+                    "profile": _coerce_profile(a.profile),
                 }
                 for a in self.apps
             ],
@@ -90,6 +105,75 @@ class Registry:
     def validate_command(self, command: str) -> None:
         if not command or not _ALLOWED_CMD.match(command.split("/")[-1]):
             raise ValueError(f"commande refusée: {command!r}")
+
+    def _unique_id(self, base: str) -> str:
+        app_id = base
+        index = 2
+        while any(app.id == app_id for app in self.apps):
+            app_id = f"{base}-{index}"
+            index += 1
+        return app_id
+
+    def add_app(
+        self,
+        *,
+        name: str,
+        cwd: str,
+        command: str,
+        args: list[str] | None = None,
+        preferred_port: int | None = None,
+        profile: str = "dev",
+        force_loopback: bool = True,
+        enabled: bool = True,
+    ) -> str:
+        self.validate_command(command)
+        app_id = self._unique_id(_slug_id(name))
+        self.apps.append(
+            AppEntry(
+                id=app_id,
+                name=name,
+                cwd=cwd,
+                command=command,
+                args=list(args or []),
+                preferred_port=preferred_port,
+                force_loopback=force_loopback,
+                enabled=enabled,
+                profile=_coerce_profile(profile),
+            )
+        )
+        self.save()
+        return app_id
+
+    def update_app(
+        self,
+        app_id: str,
+        *,
+        name: str | None = None,
+        cwd: str | None = None,
+        command: str | None = None,
+        args: list[str] | None = None,
+        preferred_port: object = _UNSET,
+        profile: str | None = None,
+    ) -> bool:
+        for app in self.apps:
+            if app.id != app_id:
+                continue
+            if command is not None:
+                self.validate_command(command)
+                app.command = command
+            if name is not None:
+                app.name = name
+            if cwd is not None:
+                app.cwd = cwd
+            if args is not None:
+                app.args = list(args)
+            if preferred_port is not _UNSET:
+                app.preferred_port = preferred_port if preferred_port is None else int(preferred_port)
+            if profile is not None:
+                app.profile = _coerce_profile(profile)
+            self.save()
+            return True
+        return False
 
     def add_allowed_root(self, path: str) -> None:
         resolved = str(Path(path).expanduser().resolve())
@@ -102,30 +186,20 @@ class Registry:
         self.apps = [a for a in self.apps if a.id != app_id]
         if len(self.apps) != before:
             self.save()
+            history.append("remove", app_id)
             return True
         return False
 
 
 def add_app_from_proposal(proposal: scanner.ProposedApp, reg: Registry | None = None) -> str:
     reg = reg or Registry.load()
-    app_id = proposal.name.lower().replace(" ", "-").replace("_", "-")
-    base = app_id
-    n = 2
-    while any(a.id == app_id for a in reg.apps):
-        app_id = f"{base}-{n}"
-        n += 1
-    entry = AppEntry(
-        id=app_id,
+    return reg.add_app(
         name=proposal.name,
         cwd=proposal.cwd,
         command=proposal.command,
         args=proposal.args,
         preferred_port=proposal.preferred_port,
     )
-    reg.validate_command(entry.command)
-    reg.apps.append(entry)
-    reg.save()
-    return app_id
 
 
 def migrate_from_localdock() -> None:
