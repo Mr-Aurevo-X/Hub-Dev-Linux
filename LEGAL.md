@@ -21,7 +21,7 @@ Mr-Aurevo-X **ne collecte aucune donnée personnelle**. Pas de compte, pas de t�
 - Stockage local : `~/.config/Mr-Aurevo-X/hubs/dev/`
 - Le Flatpak lit le disque hôte pour scanner et lancer vos serveurs localhost. Rien n’est envoyé à l’éditeur.
 - **Vérif. versions au démarrage** : GET `api.github.com/repos/Mr-Aurevo-X/Hub-Dev-Linux/releases` (lecture seule). Pas de toggle dans cette app. GitHub peut voir IP / User-Agent selon **sa** politique.
-- Dons Discord / PayPal / Revolut : sites de ces opérateurs, sur clic.
+- Dons Discord / crypto (in-app) : sites de ces opérateurs, sur clic.
 
 Droit belge.
 
@@ -50,7 +50,7 @@ Mr-Aurevo-X **collects no personal data**. No account, no telemetry, no ads.
 - Local storage: `~/.config/Mr-Aurevo-X/hubs/dev/`
 - The Flatpak reads the host disk to scan and start your localhost servers. Nothing is sent to the publisher.
 - **Startup version check**: GET `api.github.com/repos/Mr-Aurevo-X/Hub-Dev-Linux/releases` (read-only). No toggle in this app. GitHub may see IP / User-Agent under **its** policy.
-- Donate links (Discord / PayPal / Revolut): those operators’ sites, on click.
+- Donate links (Discord / crypto (in-app)): those operators’ sites, on click.
 
 Belgian law.
 

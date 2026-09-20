@@ -19,7 +19,7 @@ Vous pouvez supprimer le dossier de config à tout moment.
 
 - **Vérif. versions au démarrage** : GET `api.github.com/repos/Mr-Aurevo-X/Hub-Dev-Linux/releases` (lecture seule). **Pas de toggle** dans cette app. GitHub peut voir IP / User-Agent selon sa politique.
 - **Ouvrir un projet** : `http://127.0.0.1:<port>` (loopback). Le serveur enfant que vous lancez peut ensuite sortir du poste.
-- **Dons / liens externes** : uniquement sur clic (Discord, PayPal, Revolut, pages GitHub).
+- **Dons / liens externes** : uniquement sur clic (Discord, crypto (in-app), pages GitHub).
 
 Pas de cookies posés par l'éditeur.
 
